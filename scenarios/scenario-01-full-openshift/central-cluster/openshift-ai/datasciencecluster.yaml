@@ -1,0 +1,45 @@
+apiVersion: datasciencecluster.opendatahub.io/v1
+kind: DataScienceCluster
+metadata:
+  name: default-dsc
+  namespace: redhat-ods-operator
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+    app.kubernetes.io/component: openshift-ai
+    scenario: scenario-01-full-openshift
+spec:
+  components:
+    dashboard:
+      managementState: Managed
+    workbenches:
+      managementState: Managed
+    datasciencepipelines:
+      managementState: Managed
+    kserve:
+      managementState: Managed
+      serving:
+        managementState: Managed
+        name: knative-serving
+        ingressGateway:
+          certificate:
+            type: OpenshiftDefaultIngress
+    modelmeshserving:
+      managementState: Managed
+    modelregistry:
+      managementState: Managed
+      registriesNamespace: rhoai-model-registries
+    codeflare:
+      managementState: Removed
+    kueue:
+      managementState: Removed
+    ray:
+      managementState: Removed
+    trainingoperator:
+      managementState: Removed
+    trustyai:
+      managementState: Removed
+    feastoperator:
+      managementState: Removed
+    llamastackoperator:
+      managementState: Removed
+
