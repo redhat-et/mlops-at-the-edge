@@ -1,0 +1,46 @@
+# Model files (can be large)
+*.onnx
+*.pt
+*.pth
+*.h5
+*.pb
+*.tflite
+
+# VM images
+*.qcow2
+*.img
+
+# Credentials and secrets
+*secret*
+*credential*
+*.key
+*.pem
+*.crt
+!*.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
