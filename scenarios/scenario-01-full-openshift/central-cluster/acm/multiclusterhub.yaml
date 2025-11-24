@@ -1,0 +1,11 @@
+apiVersion: operator.open-cluster-management.io/v1
+kind: MultiClusterHub
+metadata:
+  name: multiclusterhub
+  namespace: open-cluster-management
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+    app.kubernetes.io/component: acm
+    scenario: scenario-01-full-openshift
+spec: {}
+
