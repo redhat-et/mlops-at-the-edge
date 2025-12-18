@@ -5,7 +5,6 @@ namespace: mlops-edge-central
 
 resources:
   - openshift-ai/
-  - flightctl/
 
 commonLabels:
   app.kubernetes.io/part-of: mlops-edge

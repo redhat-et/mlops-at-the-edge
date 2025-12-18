@@ -1,0 +1,16 @@
+FROM quay.io/centos-bootc/centos-bootc:stream9
+
+RUN dnf -y config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.repo && \
+    dnf -y install flightctl-agent && \
+    dnf -y clean all && \
+    systemctl enable flightctl-agent.service
+
+RUN dnf -y install cloud-init open-vm-tools && \
+    dnf -y clean all && \
+    ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
+    systemctl enable vmtoolsd.service
+
+RUN dnf -y install epel-release epel-next-release && \
+   dnf -y install podman-compose && \
+   dnf -y clean all && \
+   systemctl enable podman.service

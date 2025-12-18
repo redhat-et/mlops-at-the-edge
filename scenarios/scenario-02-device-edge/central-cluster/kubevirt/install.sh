@@ -8,5 +8,5 @@ kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEAS
 oc adm policy add-scc-to-user privileged -n kubevirt -z kubevirt-operator
 # Create the KubeVirt CR (instance deployment request) which triggers the actual installation
 kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-cr.yaml
-# wait until all KubeVirt components are up
+# Wait until all KubeVirt components are up
 kubectl -n kubevirt wait kv kubevirt --for condition=Available --timeout=180s
