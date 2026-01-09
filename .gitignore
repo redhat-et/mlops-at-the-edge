@@ -44,3 +44,6 @@ Thumbs.db
 *.log
 *.bak
 
+# Ignore generated files
+scenarios/scenario-02-device-edge/fleet/agentconfig.yaml
+scenarios/scenario-02-device-edge/fleet/output/
