@@ -2,6 +2,7 @@
 
 OCI_REGISTRY=$1
 USERNAME_OR_ORG=$2
+IMAGE_TYPE=$3
 
 if [ -z "$OCI_REGISTRY" ]
 then
@@ -15,10 +16,16 @@ then
     exit 1
 fi
 
+if [ -z "$IMAGE_TYPE" ]
+then 
+    echo "Image type to build is not provided, ami or qcow2 are supported"
+    exit 1
+fi
+
+
 # Build bootc container image with flightctl agent
 OCI_REFERENCE=$OCI_REGISTRY/$USERNAME_OR_ORG
 FLIGHTCTL_IMAGE_REPO_NAME=centos-bootc-flightctl
-CONTAINERDISK_IMAGE_REPO_NAME=diskimage-qcow2
 OCI_IMAGE_TAG=v1
 
 FLIGHTCTL_IMAGE=$OCI_REFERENCE/$FLIGHTCTL_IMAGE_REPO_NAME:$OCI_IMAGE_TAG
@@ -31,10 +38,10 @@ fi
 
 sudo docker push $FLIGHTCTL_IMAGE
 
-# Create qcow2
+# Create image
 if [ -d output ]
 then 
-    echo "Output directory already exists with a qcow2 image to boot the fleet"
+    echo "Output directory already exists with an image to boot the fleet"
     exit 1
 fi
 
@@ -46,14 +53,16 @@ sudo podman run --rm -it --privileged --pull=newer \
     -v "${PWD}/output":/output \
     -v /var/lib/containers/storage:/var/lib/containers/storage \
     quay.io/centos-bootc/bootc-image-builder:latest \
-    --type qcow2 \
+    --type $IMAGE_TYPE \
     $FLIGHTCTL_IMAGE
 
 # Build containerdisk OCI image for KubeVirt
-sudo chown -R $(whoami):$(whoami) "${PWD}/output"
+if [ "$IMAGE_TYPE" = "qcow2" ]
+then
 
-CONTAINERDISK_IMAGE=$OCI_REFERENCE/$CONTAINERDISK_IMAGE_REPO_NAME:$OCI_IMAGE_TAG
+    CONTAINERDISK_IMAGE=$OCI_REFERENCE/diskimage-qcow2:$OCI_IMAGE_TAG
 
-sudo docker build -t $CONTAINERDISK_IMAGE -f Dockerfile.qcow2-image .
-
-sudo docker push $CONTAINERDISK_IMAGE
+    sudo chown -R $(whoami):$(whoami) "${PWD}/output"
+    sudo docker build -t $CONTAINERDISK_IMAGE -f Dockerfile.qcow2-image .
+    sudo docker push $CONTAINERDISK_IMAGE
+fi
