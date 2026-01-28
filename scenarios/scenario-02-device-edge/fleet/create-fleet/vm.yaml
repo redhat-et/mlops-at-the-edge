@@ -1,17 +1,18 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: flightctl-device
-  # TODO create a namespace called fleet and have all vms there
-  namespace: flightctl
+  name: $DEVICE_NAME
+  namespace: $FLEET_NAMESPACE
 spec:
   runStrategy: Always
+  instancetype:
+    name: flightctl-device
+    kind: VirtualMachineInstancetype
   template:
     metadata:
       labels:
         app.kubernetes.io/part-of: mlops-edge
     spec:
-      # NOTE can set the access credentials of vm
       # node selector field might be useful for gpu part
       domain:
         devices:
@@ -20,20 +21,17 @@ spec:
               disk:
                 bus: virtio
           interfaces:
-          - name: default
-            masquerade: {}
-        resources:
-          requests:
-            memory: 64M
+            - name: default
+              masquerade: {}
       networks:
       - name: default
         pod: {}
       volumes:
         - name: containerdisk
           containerDisk:
-            # TODO pass this dynamically along - using kustomize
-            image: quay.io/clwalsh/centos-bootc-flightctl/diskimage-qcow2:v1
+            image: $FLIGHTCTL_CONTAINERDISK_IMAGE
+            imagePullPolicy: Always
         - name: cloudinitdisk
           cloudInitNoCloud:
             secretRef:
-              name: flightctl-cloudinit
+              name: flightctl-cloud-init

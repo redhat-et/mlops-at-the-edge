@@ -5,6 +5,10 @@ RUN dnf -y config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.rep
     dnf -y clean all && \
     systemctl enable flightctl-agent.service
 
+RUN dnf -y install qemu-guest-agent && \
+    dnf -y clean all && \
+    systemctl enable qemu-guest-agent
+
 RUN dnf -y install cloud-init open-vm-tools && \
     dnf -y clean all && \
     ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \

@@ -1,0 +1,7 @@
+#cloud-config
+write_files:
+- path: /etc/flightctl/updated-config.yaml
+  encoding: b64
+  content: $ENCODED_AGENTCONFIG
+runcmd:
+  - cp /etc/flightctl/updated-config.yaml /etc/flightctl/config.yaml    
