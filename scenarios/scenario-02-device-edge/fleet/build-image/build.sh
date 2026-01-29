@@ -22,6 +22,11 @@ then
     exit 1
 fi
 
+if [ -d output ]
+then 
+    echo "Output directory already exists with an image to boot the fleet"
+    exit 1
+fi
 
 # Build bootc container image with flightctl agent
 OCI_REFERENCE=$OCI_REGISTRY/$USERNAME_OR_ORG
@@ -39,12 +44,6 @@ fi
 sudo docker push $FLIGHTCTL_IMAGE
 
 # Create image
-if [ -d output ]
-then 
-    echo "Output directory already exists with an image to boot the fleet"
-    exit 1
-fi
-
 mkdir -p output
 sudo podman pull $FLIGHTCTL_IMAGE
 sudo podman run --rm -it --privileged --pull=newer \
