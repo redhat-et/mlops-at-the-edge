@@ -44,3 +44,6 @@ Thumbs.db
 *.log
 *.bak
 
+# Claude
+claude.md
+flightctl-docs
