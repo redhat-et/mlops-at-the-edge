@@ -1,0 +1,6 @@
+FROM registry.access.redhat.com/ubi9/ubi-micro:9.7
+
+# Copy the model files from the base container
+COPY models /models
+
+USER 1001

@@ -1,0 +1,4 @@
+# Exclude build scripts from the container image
+model-downloader.py
+README.md
+.dockerignore
