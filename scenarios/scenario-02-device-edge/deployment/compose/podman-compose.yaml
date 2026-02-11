@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+  # Model sidecar container - provides model files via shared volume
+  model-car:
+    image: quay.io/redhat-et/modelcar-llama-3.2-1b:dev
+    container_name: model-car
+    command: ["sleep", "infinity"]
+    volumes:
+      - model-storage:/models:Z
+    restart: always
+    networks:
+      - mlops-network
+
+  # vLLM GPU inference server
+  vllm-server:
+    image: quay.io/redhat-et/vllm-server:latest
+    container_name: vllm-server
+    depends_on:
+      - model-car
+    volumes:
+      - model-storage:/models:ro,Z
+    ports:
+      - "8000:8000"
+    devices:
+      - nvidia.com/gpu=all
+    shm_size: 2g
+    security_opt:
+      - label=disable
+    environment:
+      - LD_LIBRARY_PATH=/usr/lib64
+    restart: always
+    networks:
+      - mlops-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # OpenWebUI chat interface
+  openwebui:
+    image: quay.io/redhat-et/openwebui:latest
+    container_name: openwebui
+    depends_on:
+      - vllm-server
+    volumes:
+      - openwebui-data:/app/backend/data:Z
+    network_mode: host
+    environment:
+      - OPENAI_API_BASE_URL=http://localhost:8000/v1
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  model-storage:
+    driver: local
+  openwebui-data:
+    driver: local
+
+networks:
+  mlops-network:
+    driver: bridge

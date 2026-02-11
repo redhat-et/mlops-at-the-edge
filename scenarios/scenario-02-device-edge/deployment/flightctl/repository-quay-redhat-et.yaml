@@ -1,0 +1,11 @@
+apiVersion: flightctl.io/v1beta1
+kind: Repository
+metadata:
+  name: quay-redhat-et
+spec:
+  type: oci
+  url: quay.io/redhat-et
+  # If the repository is private, add authentication:
+  # httpConfig:
+  #   username: <quay-username>
+  #   password: <quay-robot-token>

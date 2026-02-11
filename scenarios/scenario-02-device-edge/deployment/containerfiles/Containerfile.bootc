@@ -1,0 +1,227 @@
+# Containerfile for RHEL 10 Bootc OS Image with FlightCtl + NVIDIA GPU Support
+#
+# This bootc image is designed for AWS EC2 g5.xlarge instances and includes:
+# - FlightCtl agent for GitOps device management
+# - Podman + podman-compose for container management
+# - NVIDIA drivers 590+ with CUDA 13.1 (installed at BUILD time)
+#
+# IMPORTANT: NVIDIA drivers are installed at BUILD time
+# Reason: Bootc images are complete OS images (kernel + userspace)
+# Build kernel = Boot kernel (unlike traditional containers)
+# DKMS compilation happens during bootc deployment (initramfs generation)
+# First boot generates CDI configuration (~2-3 minutes)
+#
+# IMPORTANT: This image uses "early binding" - the FlightCtl enrollment certificate
+# is BAKED INTO the image. All devices using this image will auto-enroll to the same
+# FlightCtl instance. This is for MVP/testing with a single, stable FlightCtl service.
+#
+# Prerequisites:
+#   1. Request FlightCtl enrollment certificate:
+#      flightctl certificate request --signer=enrollment --expiration=365d --output=embedded > containerfiles/configs/flightctl-config.yaml
+#
+# Build command:
+#   export VERSION=v1.0.X
+#   export OCI_IMAGE_REPO=quay.io/redhat-et/mlops-bootc-rhel10-nvidia
+#   cd scenarios/scenario-02-device-edge/deployment
+#   sudo podman build --platform=linux/amd64 -f containerfiles/Containerfile.bootc -t ${OCI_IMAGE_REPO}:${VERSION} .
+#
+# Convert to AMI:
+#   sudo podman run --rm -it --privileged --pull=newer \
+#     --security-opt label=type:unconfined_t \
+#     -v "${PWD}/output":/output \
+#     -v /var/lib/containers/storage:/var/lib/containers/storage \
+#     quay.io/centos-bootc/bootc-image-builder:latest \
+#     --type ami \
+#     ${OCI_IMAGE_REPO}:${VERSION}
+
+# Base image: RHEL 10 bootc
+# Note: Adjust tag based on actual RHEL 10 bootc image availability
+FROM registry.redhat.io/rhel10/rhel-bootc:10.0
+
+# =============================================================================
+# SECTION 1: FlightCtl Agent Installation (Early Binding)
+# =============================================================================
+
+# Install EPEL repository for RHEL 10
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm && \
+    dnf -y clean all
+
+# Install greenboot from CentOS Stream 9 (workaround - not available in EPEL 10 yet)
+# CRITICAL: FlightCtl agent requires greenboot < 0.16.0, so pin to 0.15.x
+RUN dnf install -y \
+    --repofrompath=centos9-appstream,https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/ \
+    --setopt=centos9-appstream.gpgcheck=0 \
+    'greenboot-0.15*' \
+    'greenboot-default-health-checks-0.15*' && \
+    dnf -y clean all
+
+# Install FlightCtl agent
+RUN dnf -y config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.repo && \
+    dnf -y install flightctl-agent --setopt=install_weak_deps=False && \
+    dnf -y clean all && \
+    systemctl enable flightctl-agent.service && \
+    systemctl mask bootc-fetch-apply-updates.timer
+
+# Copy FlightCtl enrollment configuration (early binding)
+# This config contains the enrollment endpoint and certificate
+# All devices using this image will auto-enroll to the same FlightCtl instance
+COPY containerfiles/configs/flightctl-config.yaml /etc/flightctl/config.yaml
+
+# =============================================================================
+# SECTION 2: NVIDIA GPU Setup (Build-Time Installation)
+# =============================================================================
+
+# IMPORTANT: NVIDIA drivers are installed at BUILD time
+# Bootc images are complete OS images - build kernel = boot kernel
+# DKMS will compile modules during bootc deployment (initramfs generation)
+#
+# This section installs:
+# - Build tools for DKMS compilation (gcc, make, dkms)
+# - NVIDIA drivers 590+ (cuda-drivers meta-package)
+# - nvidia-container-toolkit for CDI generation
+# - Nouveau driver blacklist
+
+# Install build tools from CentOS Stream 10 (RHEL 10 repos incomplete)
+# Use dnf swap to replace RHEL openssl packages with CentOS Stream versions atomically
+RUN dnf swap -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    openssl-fips-provider-so openssl-libs && \
+    dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    gcc \
+    make \
+    dkms && \
+    dnf -y clean all
+
+# Install X11/OpenGL/Vulkan dependencies from CentOS Stream 10
+# NVIDIA driver packages require these even for headless GPU compute
+RUN dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    libX11 \
+    libXext \
+    libglvnd \
+    libglvnd-egl \
+    libglvnd-gles \
+    libglvnd-glx \
+    libglvnd-opengl \
+    libvdpau \
+    vulkan-loader \
+    ocl-icd \
+    opencl-filesystem && \
+    dnf -y clean all
+
+# Add NVIDIA CUDA repository
+RUN dnf config-manager --add-repo \
+    https://developer.download.nvidia.com/compute/cuda/repos/rhel10/x86_64/cuda-rhel10.repo
+
+# Install kernel-devel for the bootc image kernel (required for DKMS compilation)
+# Query the installed kernel version from rpm instead of uname -r (build host kernel)
+RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
+    dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    "kernel-devel-${KERNEL_VERSION}" \
+    "kernel-headers-${KERNEL_VERSION}" && \
+    dnf -y clean all
+
+# Install NVIDIA drivers and container toolkit
+# CRITICAL: kmod-nvidia-latest-dkms will trigger DKMS build during installation
+RUN dnf install -y \
+    kmod-nvidia-latest-dkms \
+    nvidia-driver \
+    nvidia-driver-cuda \
+    nvidia-container-toolkit \
+    --setopt=install_weak_deps=False \
+    --allowerasing && \
+    dnf -y clean all
+
+# CRITICAL: Manually trigger DKMS build/install for bootc
+# Bootc images are immutable - modules must be compiled at build time
+# Explicitly specify kernel version (not build host kernel from uname -r)
+RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
+    mkdir -p /var/lib/dkms && \
+    dkms build -m nvidia -v 590.48.01 -k ${KERNEL_VERSION} && \
+    dkms install -m nvidia -v 590.48.01 -k ${KERNEL_VERSION} --force
+
+# Disable Nouveau driver (bootc will pick this up during initramfs generation)
+# DO NOT run dracut here - bootc handles initramfs at deployment time
+RUN echo "blacklist nouveau" > /etc/modprobe.d/blacklist-nouveau.conf && \
+    echo "options nouveau modeset=0" >> /etc/modprobe.d/blacklist-nouveau.conf
+
+# Copy systemd unit file for CDI generation (runs on first boot)
+COPY containerfiles/configs/nvidia-cdi-generate.service /etc/systemd/system/nvidia-cdi-generate.service
+
+# Enable CDI generation service
+# Runs once on first boot to generate /etc/cdi/nvidia.yaml for GPU passthrough
+RUN systemctl enable nvidia-cdi-generate.service
+
+# =============================================================================
+# SECTION 3: Container Runtime (Podman)
+# =============================================================================
+# NOTE: nvidia-container-toolkit installed at runtime by nvidia-setup.service
+
+RUN dnf install -y \
+    podman && \
+    dnf -y clean all && \
+    systemctl enable podman.service
+
+# CRITICAL: Install podman-compose (required for FlightCtl compose applications)
+RUN dnf -y install podman-compose && \
+    dnf -y clean all
+
+# Copy Podman configuration with required capabilities
+COPY containerfiles/configs/containers.conf /etc/containers/containers.conf
+
+# Create CDI directory (nvidia.yaml will be generated by nvidia-setup.service at first boot)
+RUN mkdir -p /etc/cdi
+
+# =============================================================================
+# SECTION 4: Cloud-Init for EC2 Runtime Configuration
+# =============================================================================
+
+# Install cloud-init for EC2 user-data processing
+# Handles EC2-specific runtime config: NVMe storage mount, SSH keys
+# NOTE: NVIDIA setup (drivers, CDI) is handled by nvidia-setup.service, NOT cloud-init
+# Install from CentOS Stream 10 (not available in RHEL 10 EPEL yet)
+RUN dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    cloud-init && \
+    dnf -y clean all && \
+    ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
+    systemctl enable cloud-init.service
+
+# =============================================================================
+# SECTION 5: Pre-create Directories
+# =============================================================================
+
+# Create directory for container storage (will be mounted from NVMe at runtime)
+RUN mkdir -p /var/lib/containers
+
+# =============================================================================
+# Metadata Labels
+# =============================================================================
+
+LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
+LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent, NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads"
+LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
+LABEL org.opencontainers.image.source="https://github.com/your-org/mlops-at-the-edge"
+LABEL io.flightctl.agent="true"
+LABEL io.flightctl.binding="early"
+LABEL hardware.gpu.vendor="nvidia"
+LABEL hardware.gpu.model="a10g"
+LABEL os.distribution="rhel"
+LABEL os.version="10"
