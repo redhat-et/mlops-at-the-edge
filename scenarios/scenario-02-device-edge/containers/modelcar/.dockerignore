@@ -1,4 +1,2 @@
-# Exclude build scripts from the container image
-model-downloader.py
+# Exclude documentation from the build context
 README.md
-.dockerignore
