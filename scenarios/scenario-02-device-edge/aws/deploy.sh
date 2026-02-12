@@ -12,9 +12,13 @@ INSTANCE_TYPE=t3.xlarge
 # Find a suitable subnet in an availability zone that supports instance type
 SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=availability-zone,Values=$(aws ec2 describe-instance-type-offerings --location-type availability-zone --filters Name=instance-type,Values=$INSTANCE_TYPE --query 'InstanceTypeOfferings[0].Location' --output text)" --query 'Subnets[0].SubnetId' --output text)
 
-# Get the 'default' Security Group for that specific Subnet's VPC
+# Get VPC ID for the subnet
 VPC_ID=$(aws ec2 describe-subnets --subnet-ids $SUBNET_ID --query 'Subnets[0].VpcId' --output text)
-SG_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC_ID Name=group-name,Values=default --query "SecurityGroups[0].GroupId" --output text)
+
+# Create a security group for the flightctl instance
+SG_NAME=flightctl-sg
+aws ec2 create-security-group --group-name $SG_NAME --description "Security group for Flightctl instance" --vpc-id $VPC_ID
+SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=$SG_NAME --query "SecurityGroups[0].GroupId" --output text)
 
 # Enable SSH access
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 2>/dev/null || true
@@ -24,7 +28,7 @@ aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port
 # Open access to Flightctl PAM Issuer endpoint for authentication
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 8444 --cidr 0.0.0.0/0 2>/dev/null || true
 # Expose Flightctl UI
-aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 4443 --cidr 0.0.0.0/0 2>/dev/null || true
+aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 2>/dev/null || true
 
 # Launch an instance with a fedora image and install Flightctl using user data script
 NAME=flightctl-instance
