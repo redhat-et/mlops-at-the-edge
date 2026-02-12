@@ -41,3 +41,6 @@ do
 done
 
 flightctl apply -f fleet.yaml
+
+FLIGHTCTL_UI_URL=$(kubectl get route flightctl-ui -n $FC_NAMESPACE -o=jsonpath='{.spec.host}')
+echo "The Flightctl UI is available at: https://${FLIGHTCTL_UI_URL}"

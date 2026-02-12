@@ -49,9 +49,6 @@ FLIGHTCTL_INSTANCE_IP=$(aws ec2 describe-instances \
     --filters "Name=tag:Name,Values=${NAME}" "Name=instance-state-name,Values=running" \
     --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
 
-echo "Access the instance via the following command: ssh fedora@${FLIGHTCTL_INSTANCE_IP} -i ${SSH_KEY_NAME}.pem -o StrictHostKeyChecking=no"
-echo "The Flightctl UI is available at: https://${FLIGHTCTL_INSTANCE_IP}.nip.io"
-
 # Create a Flightctl fleet
 flightctl login -k https://${FLIGHTCTL_INSTANCE_IP}.nip.io:3443 -u mlops -p mlops123
 
@@ -87,3 +84,6 @@ do
 done
 
 flightctl apply -f fleet.yaml
+
+echo "Access the Flightctl instance via the following command: ssh fedora@${FLIGHTCTL_INSTANCE_IP} -i ${SSH_KEY_NAME}.pem -o StrictHostKeyChecking=no"
+echo "The Flightctl UI is available at: https://${FLIGHTCTL_INSTANCE_IP}.nip.io login in with the username mlops and password mlops123"
