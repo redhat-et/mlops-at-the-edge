@@ -2,7 +2,6 @@
 
 OCI_REGISTRY=$1
 USERNAME_OR_ORG=$2
-IMAGE_TYPE=$3
 
 if [ -z "$OCI_REGISTRY" ]
 then
@@ -13,12 +12,6 @@ fi
 if [ -z "$USERNAME_OR_ORG" ]
 then
     echo "Missing username or organisation for ${OCI_REGISTRY} account"
-    exit 1
-fi
-
-if [ -z "$IMAGE_TYPE" ]
-then 
-    echo "Image type to build is not provided, ami or qcow2 are supported"
     exit 1
 fi
 
@@ -52,16 +45,12 @@ sudo podman run --rm -it --privileged --pull=newer \
     -v "${PWD}/output":/output \
     -v /var/lib/containers/storage:/var/lib/containers/storage \
     quay.io/centos-bootc/bootc-image-builder:latest \
-    --type $IMAGE_TYPE \
+    --type qcow2 \
     $FLIGHTCTL_IMAGE
 
 # Build containerdisk OCI image for KubeVirt
-if [ "$IMAGE_TYPE" = "qcow2" ]
-then
+CONTAINERDISK_IMAGE=$OCI_REFERENCE/diskimage-qcow2:$OCI_IMAGE_TAG
 
-    CONTAINERDISK_IMAGE=$OCI_REFERENCE/diskimage-qcow2:$OCI_IMAGE_TAG
-
-    sudo chown -R $(whoami):$(whoami) "${PWD}/output"
-    sudo docker build -t $CONTAINERDISK_IMAGE -f Dockerfile.qcow2-image .
-    sudo docker push $CONTAINERDISK_IMAGE
-fi
+sudo chown -R $(whoami):$(whoami) "${PWD}/output"
+sudo docker build -t $CONTAINERDISK_IMAGE -f Dockerfile.qcow2-image .
+sudo docker push $CONTAINERDISK_IMAGE
