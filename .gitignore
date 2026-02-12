@@ -44,3 +44,6 @@ Thumbs.db
 *.log
 *.bak
 
+# Ignore generated files
+scenarios/scenario-02-device-edge/openshift/fleet/build-image/output/
+scenarios/scenario-02-device-edge/openshift/fleet/create-fleet/cloud-init

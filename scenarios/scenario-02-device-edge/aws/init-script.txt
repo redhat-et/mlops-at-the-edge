@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Prerequisites
+sudo dnf install -y wget
+
+# Install Flightctl
+sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
+sudo dnf install -y flightctl-services
+sudo dnf install -y flightctl-cli
+
+# Install yq
+VERSION=v4.52.2
+PLATFORM=linux_amd64
+
+wget https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_${PLATFORM}.tar.gz -O - | tar xz && sudo mv yq_${PLATFORM} /usr/local/bin/yq
+
+# Set global.baseDomain
+FQDN=$(curl ifconfig.me).nip.io yq -i '.global.baseDomain = strenv(FQDN)' /etc/flightctl/service-config.yaml
+
+# Start Flightctl service
+sudo systemctl enable --now flightctl.target
+
+# Add user to PAM issuer
+export USER=mlops
+export PASSWORD=mlops123
+
+sudo podman exec -i flightctl-pam-issuer groupadd flightctl-admin 2>/dev/null || true && \
+sudo podman exec flightctl-pam-issuer adduser $USER && \
+sudo podman exec -i flightctl-pam-issuer sh -c "echo \"$USER:$PASSWORD\" | chpasswd" && \
+sudo podman exec -i flightctl-pam-issuer usermod -aG flightctl-admin $USER
