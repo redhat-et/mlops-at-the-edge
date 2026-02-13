@@ -18,6 +18,11 @@
 *.crt
 !*.example
 
+# FlightCtl enrollment config (contains sensitive certs)
+containerfiles/configs/flightctl-config.yaml
+**/flightctl-config.yaml
+!**/flightctl-config.yaml.template
+
 # Python
 __pycache__/
 *.py[cod]
@@ -44,3 +49,6 @@ Thumbs.db
 *.log
 *.bak
 
+# Claude
+claude.md
+flightctl-docs
