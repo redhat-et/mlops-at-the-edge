@@ -11,13 +11,13 @@
 # DKMS compilation happens during bootc deployment (initramfs generation)
 # First boot generates CDI configuration (~2-3 minutes)
 #
-# IMPORTANT: This image uses "early binding" - the FlightCtl enrollment certificate
-# is BAKED INTO the image. All devices using this image will auto-enroll to the same
-# FlightCtl instance. This is for MVP/testing with a single, stable FlightCtl service.
+# IMPORTANT: This image uses "late binding" - the FlightCtl enrollment certificate
+# is NOT baked into the image. Instead, it is injected at instance launch time via
+# cloud-init user-data. This allows the same AMI to be used with different FlightCtl
+# instances by simply changing the user-data.
 #
-# Prerequisites:
-#   1. Request FlightCtl enrollment certificate:
-#      flightctl certificate request --signer=enrollment --expiration=365d --output=embedded > containerfiles/configs/flightctl-config.yaml
+# The FlightCtl agent is installed and enabled, but will wait for /etc/flightctl/config.yaml
+# to be created by cloud-init before connecting to the FlightCtl service.
 #
 # Build command:
 #   export VERSION=v1.0.X
@@ -39,7 +39,7 @@
 FROM registry.redhat.io/rhel10/rhel-bootc:10.0
 
 # =============================================================================
-# SECTION 1: FlightCtl Agent Installation (Early Binding)
+# SECTION 1: FlightCtl Agent Installation (Late Binding)
 # =============================================================================
 
 # Install EPEL repository for RHEL 10
@@ -62,10 +62,10 @@ RUN dnf -y config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.rep
     systemctl enable flightctl-agent.service && \
     systemctl mask bootc-fetch-apply-updates.timer
 
-# Copy FlightCtl enrollment configuration (early binding)
-# This config contains the enrollment endpoint and certificate
-# All devices using this image will auto-enroll to the same FlightCtl instance
-COPY containerfiles/configs/flightctl-config.yaml /etc/flightctl/config.yaml
+# FlightCtl enrollment configuration (late binding)
+# DO NOT copy config.yaml into the image - it will be injected via cloud-init at launch time
+# The FlightCtl agent will start but remain idle until /etc/flightctl/config.yaml exists
+# Cloud-init will create this file with enrollment credentials specific to each deployment
 
 # =============================================================================
 # SECTION 2: NVIDIA GPU Setup (Build-Time Installation)
@@ -211,16 +211,19 @@ RUN dnf install -y \
 # Create directory for container storage (will be mounted from NVMe at runtime)
 RUN mkdir -p /var/lib/containers
 
+# Create FlightCtl config directory (cloud-init will populate config.yaml at launch)
+RUN mkdir -p /etc/flightctl
+
 # =============================================================================
 # Metadata Labels
 # =============================================================================
 
-LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
-LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent, NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads"
+LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support (Late Binding)"
+LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads. FlightCtl config injected via cloud-init at launch."
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/your-org/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"
-LABEL io.flightctl.binding="early"
+LABEL io.flightctl.binding="late"
 LABEL hardware.gpu.vendor="nvidia"
 LABEL hardware.gpu.model="a10g"
 LABEL os.distribution="rhel"
