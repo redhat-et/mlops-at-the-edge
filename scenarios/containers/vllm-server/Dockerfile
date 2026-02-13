@@ -26,9 +26,9 @@ ENV MODEL_PATH=/models \
     VLLM_HOST=0.0.0.0
 
 # Default command - expects model at /models (mounted from model car)
-# Base image has ENTRYPOINT set, so CMD should only contain arguments
-CMD ["--model", "/models", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--dtype", "bfloat16", \
-     "--max-model-len", "16384"]
+# Using shell form to allow environment variable expansion
+CMD vllm serve "$MODEL_PATH" \
+    --host "$VLLM_HOST" \
+    --port "$VLLM_PORT" \
+    --dtype bfloat16 \
+    --max-model-len 16384

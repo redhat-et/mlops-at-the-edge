@@ -302,6 +302,33 @@ sudo podman run -d \
    - Forces vLLM to use host's CUDA libraries instead of bundled version
    - Without this: "CUDA driver version is insufficient" error (Error 803)
 
+**Optional: Runtime Configuration via Environment Variables**
+
+The vLLM server supports runtime configuration through environment variables:
+
+```bash
+# Example: Change port and model location
+sudo podman run -d \
+  --name vllm-server \
+  --volume model-storage:/models:ro,Z \
+  --publish 9000:9000 \
+  --device nvidia.com/gpu=all \
+  --shm-size=2g \
+  --security-opt=label=disable \
+  --env LD_LIBRARY_PATH=/usr/lib64 \
+  --env VLLM_PORT=9000 \
+  --env VLLM_HOST=0.0.0.0 \
+  --env MODEL_PATH=/models \
+  quay.io/redhat-et/vllm-server:latest
+```
+
+**Available environment variables:**
+- `MODEL_PATH` - Path to model directory (default: `/models`)
+- `VLLM_PORT` - Port for vLLM API (default: `8000`)
+- `VLLM_HOST` - Host binding address (default: `0.0.0.0`)
+
+**Note:** Remember to update the `--publish` flag to match `VLLM_PORT` if you change it.
+
 **Monitor startup (takes 60-90 seconds):**
 
 ```bash
