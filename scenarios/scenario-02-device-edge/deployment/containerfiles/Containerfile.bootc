@@ -285,9 +285,10 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
 
-  # OTLP exporter - send to external collector (configure endpoint via env var)
+  # OTLP exporter - send to external collector
+  # Note: Not enabled by default. To use, set OTEL_EXPORTER_OTLP_ENDPOINT env var and add 'otlp' to exporters list
   otlp:
-    endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:-localhost:4317}"
+    endpoint: "localhost:4317"
     tls:
       insecure: true
 
@@ -307,11 +308,14 @@ EOF
 RUN cat > /etc/systemd/system/otelcol.service <<'EOF'
 [Unit]
 Description=OpenTelemetry Collector
-After=network.target
+After=network-online.target flightctl-agent.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
+# Wait for FlightCtl agent to be ready (prevents startup conflicts)
+ExecStartPre=/bin/sleep 5
 ExecStart=/usr/local/bin/otelcol --config=/etc/otelcol/config.yaml
 Restart=on-failure
 RestartSec=30
@@ -338,8 +342,8 @@ RUN mkdir -p /etc/flightctl
 # =============================================================================
 
 LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support (Late Binding)"
-LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads. FlightCtl config injected via cloud-init at launch. Includes wget, node_exporter (disabled), and OpenTelemetry Collector (enabled) for observability."
-LABEL org.opencontainers.image.version="v1.0.6"
+LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads. FlightCtl config injected via cloud-init at launch. Includes wget, node_exporter (disabled), and OpenTelemetry Collector (enabled) for observability. v1.0.8 fixes OTel systemd ordering to prevent FlightCtl conflicts."
+LABEL org.opencontainers.image.version="v1.0.8"
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/your-org/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"
