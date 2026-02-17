@@ -194,15 +194,134 @@ RUN mkdir -p /etc/cdi
 # Handles EC2-specific runtime config: NVMe storage mount, SSH keys
 # NOTE: NVIDIA setup (drivers, CDI) is handled by nvidia-setup.service, NOT cloud-init
 # Install from CentOS Stream 10 (not available in RHEL 10 EPEL yet)
+# Shaun- Added wget for v1.0.6 (Clodagh's request for troubleshooting/metrics)
 RUN dnf install -y \
     --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
     --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
     --setopt=centos10-baseos.gpgcheck=0 \
     --setopt=centos10-appstream.gpgcheck=0 \
-    cloud-init && \
+    cloud-init \
+    wget && \
     dnf -y clean all && \
     ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
     systemctl enable cloud-init.service
+
+# =============================================================================
+# SECTION 4.5: Observability - Node Exporter for Prometheus Metrics
+# =============================================================================
+# Shaun- Added for Clodagh's metrics collection (v1.0.6)
+
+# Install and configure node_exporter for system metrics
+RUN NODE_EXPORTER_VERSION="1.8.2" && \
+    curl -L https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz \
+    -o /tmp/node_exporter.tar.gz && \
+    tar -xzf /tmp/node_exporter.tar.gz -C /usr/local/bin --strip-components=1 \
+    node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter && \
+    rm /tmp/node_exporter.tar.gz && \
+    useradd -rs /bin/false node_exporter
+
+# Create node_exporter systemd service
+RUN cat > /etc/systemd/system/node_exporter.service <<'EOF'
+[Unit]
+Description=Node Exporter
+After=network.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Shaun- Node exporter installed but NOT enabled (use otel_collector instead)
+# Enable manually if needed: systemctl enable node_exporter.service
+
+# =============================================================================
+# SECTION 4.6: OpenTelemetry Collector for Metrics/Traces/Logs
+# =============================================================================
+# Shaun- Primary observability agent for Clodagh's metrics collection (v1.0.6)
+
+# Install OpenTelemetry Collector (contrib distribution with all receivers/exporters)
+RUN OTEL_VERSION="0.96.0" && \
+    curl -L https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz \
+    -o /tmp/otelcol.tar.gz && \
+    tar -xzf /tmp/otelcol.tar.gz -C /usr/local/bin otelcol-contrib && \
+    mv /usr/local/bin/otelcol-contrib /usr/local/bin/otelcol && \
+    rm /tmp/otelcol.tar.gz && \
+    mkdir -p /etc/otelcol
+
+# Create basic OpenTelemetry Collector configuration
+# Collects host metrics, forwards to Prometheus/OTLP endpoints
+RUN cat > /etc/otelcol/config.yaml <<'EOF'
+receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      disk:
+      memory:
+      network:
+      filesystem:
+      load:
+      process:
+
+  prometheus:
+    config:
+      scrape_configs:
+        # Scrape node_exporter if enabled
+        - job_name: 'node_exporter'
+          static_configs:
+            - targets: ['localhost:9100']
+
+processors:
+  batch:
+    timeout: 10s
+
+exporters:
+  # Prometheus exporter - exposes metrics on port 8889
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+  # OTLP exporter - send to external collector (configure endpoint via env var)
+  otlp:
+    endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:-localhost:4317}"
+    tls:
+      insecure: true
+
+  # Logging exporter for debugging
+  logging:
+    loglevel: info
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics, prometheus]
+      processors: [batch]
+      exporters: [prometheus, logging]
+EOF
+
+# Create OpenTelemetry Collector systemd service
+RUN cat > /etc/systemd/system/otelcol.service <<'EOF'
+[Unit]
+Description=OpenTelemetry Collector
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/otelcol --config=/etc/otelcol/config.yaml
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable OpenTelemetry Collector service (runs on port 8889 for Prometheus metrics)
+RUN systemctl enable otelcol.service
 
 # =============================================================================
 # SECTION 5: Pre-create Directories
@@ -219,7 +338,8 @@ RUN mkdir -p /etc/flightctl
 # =============================================================================
 
 LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support (Late Binding)"
-LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads. FlightCtl config injected via cloud-init at launch."
+LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, and podman-compose for GPU-accelerated MLOps workloads. FlightCtl config injected via cloud-init at launch. Includes wget, node_exporter (disabled), and OpenTelemetry Collector (enabled) for observability."
+LABEL org.opencontainers.image.version="v1.0.6"
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/your-org/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"
