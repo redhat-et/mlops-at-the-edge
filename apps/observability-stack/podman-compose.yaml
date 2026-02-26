@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+  prometheus:
+    image: docker.io/prom/prometheus:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # allow a direct connection from container to the local machine
+    ports:
+      - "9090:9090"  
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:Z # mount Prometheus config file
+
+  grafana:
+    image: docker.io/grafana/grafana:latest
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000" 

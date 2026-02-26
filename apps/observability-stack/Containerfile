@@ -1,0 +1,4 @@
+FROM scratch
+
+COPY prometheus.yaml /prometheus.yaml
+COPY podman-compose.yaml /podman-compose.yaml
