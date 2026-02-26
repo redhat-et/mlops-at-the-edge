@@ -5,8 +5,9 @@ sudo dnf install -y wget
 
 # Install Flightctl
 sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
-sudo dnf install -y flightctl-services
-sudo dnf install -y flightctl-cli
+sudo dnf install -y flightctl-services-1.0.2-1.fc43.x86_64
+sudo dnf install -y flightctl-cli-1.0.2-1.fc43.x86_64
+sudo dnf install -y flightctl-observability-1.0.2-1.fc43.x86_64
 
 # Install yq
 VERSION=v4.52.2
@@ -28,3 +29,66 @@ sudo podman exec -i flightctl-pam-issuer groupadd flightctl-admin 2>/dev/null ||
 sudo podman exec flightctl-pam-issuer adduser $USER && \
 sudo podman exec -i flightctl-pam-issuer sh -c "echo \"$USER:$PASSWORD\" | chpasswd" && \
 sudo podman exec -i flightctl-pam-issuer usermod -aG flightctl-admin $USER
+
+# Login to Flightctl 
+sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u mlops -p mlops123
+
+# Add observability config
+yq -i '
+  .observability.grafana.image = "docker.io/grafana/grafana:latest" |
+  .observability.grafana.published_port = "3000" |
+  .observability.grafana.oauth.enabled = "false" | 
+  .observability.grafana.local_admin_user = "admin" |
+  .observability.grafana.local_admin_password = "admin-password" |
+  .observability.grafana.root_url = "http://localhost:3000" | 
+  .observability.grafana.protocol = "http" |
+  .observability.prometheus.image = "docker.io/prom/prometheus:latest" |
+  .observability.otel_collector.image = "docker.io/otel/opentelemetry-collector-contrib:latest" |
+  .observability.otel_collector.grpc_port = "4317" |
+  .observability.otel_collector.http_port = "4318" |
+  .observability.telemetry_gateway.image = "quay.io/flightctl/flightctl-telemetry-gateway:latest" |
+  .observability.telemetry_gateway.grpc_port = 4317 |
+  .observability.telemetry_gateway.prometheus_port = 9464 |
+  .observability.telemetry_gateway.config.telemetryGateway.export.prometheus = "0.0.0.0:9464" 
+' /etc/flightctl/service-config.yaml
+
+# Render templates
+sudo flightctl-render-observability
+
+# Start observability service
+sudo systemctl enable --now flightctl-observability.target
+
+# Download sample Grafana dashboards provided by the vLLM project
+curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/performance_statistics.json --output-dir /etc/grafana/provisioning/dashboards -O
+curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/query_statistics.json --output-dir /etc/grafana/provisioning/dashboards -O
+
+# Prepare script used to configure the Grafana datasources
+
+cat > /etc/grafana/provisioning/datasources/mlops-fleet.yaml << EOF
+apiVersion: 1
+datasources:
+EOF
+
+cat > /opt/set-grafana-datasources.sh << EOF
+#! /bin/bash
+get_ips_of_fleet_members() {
+    device_names=$(sudo flightctl get device --field-selector=metadata.owner=Fleet/"$1" -o name)
+    ips=()
+    for device_name in $device_names
+    do
+        ip=$(sudo flightctl get device $device_name -o yaml | yq '.status.systemInfo.customInfo.publicIp')
+        ips+=( $ip )
+    done
+    echo "${ips[@]}"
+}
+
+FLEET_MEMBER_IPS=$(get_ips_of_fleet_members mlops)
+for ip in $FLEET_MEMBER_IPS
+do
+  sudo IP=$ip yq -i '.datasources += {"name": "Device " +  strenv(IP), "type": "prometheus", "url": "http://" + strenv(IP) + ".nip.io:9090"}' /etc/grafana/provisioning/datasources/mlops-fleet.yaml
+done
+
+sudo systemctl restart flightctl-observability.target
+EOF
+
+sudo chmod +x /opt/set-grafana-datasources.sh

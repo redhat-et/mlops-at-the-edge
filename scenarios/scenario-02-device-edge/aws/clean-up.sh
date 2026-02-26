@@ -9,7 +9,10 @@ EC2_INSTANCE_NAMES=("flightctl-instance" "flightctl-device-1" "flightctl-device-
 
 for instance_name in "${EC2_INSTANCE_NAMES[@]}"
 do
-    aws ec2 terminate-instances --instance-ids $(aws ec2 describe-instances --filters "Name=tag:Name,Values=${instance_name}" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text)
+    INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${instance_name}" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text) 
+    aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+    aws ec2 wait instance-terminated --instance-ids $INSTANCE_ID
 done
 
 aws ec2 delete-security-group --group-name flightctl-sg
+aws ec2 delete-security-group --group-name mlops-fleet-sg

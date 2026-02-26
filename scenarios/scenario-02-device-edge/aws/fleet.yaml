@@ -6,5 +6,81 @@ spec:
   selector:
     matchLabels:
       project: mlops
-  template: 
-    spec: {}
+  template:
+    metadata:
+      labels:
+        fleet: mlops
+    spec:      
+      applications:
+        - name: observability-stack
+          image: quay.io/clwalsh/observability-stack:v4
+          appType: compose
+          runAs: flightctl
+        - name: mlops-gpu-stack
+          appType: compose
+          inline:
+            - path: podman-compose.yaml
+              content: |
+                version: "3.8"
+                services:
+                  model-car:
+                    image: quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
+                    command: ["sleep", "infinity"]
+                    volumes:
+                      - model-storage:/models:Z
+                    restart: always
+                    networks:
+                      - mlops-network
+
+                  vllm-server:
+                    image: quay.io/redhat-et/vllm-server:latest
+                    depends_on:
+                      - model-car
+                    volumes:
+                      - model-storage:/models:ro,Z
+                    ports:
+                      - "8000:8000"
+                    # Critical GPU configuration flags (all three required):
+                    devices:
+                      - nvidia.com/gpu=all  # GPU passthrough via CDI
+                    shm_size: 2g  # Prevents "Bus error" - vLLM needs shared memory for tensor operations
+                    security_opt:
+                      - label=disable  # Disables SELinux confinement - required for GPU access with CDI
+                    environment:
+                      - LD_LIBRARY_PATH=/usr/lib64  # Forces vLLM to use host CUDA 13.1 libs instead of bundled 12.4
+                    restart: always
+                    networks:
+                      - mlops-network
+                    healthcheck:
+                      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+                      interval: 30s
+                      timeout: 10s
+                      retries: 3
+                      start_period: 90s
+
+                  openwebui:
+                    image: quay.io/redhat-et/openwebui:latest
+                    depends_on:
+                      - vllm-server
+                    volumes:
+                      - openwebui-data:/app/backend/data:Z
+                    network_mode: host  # Uses host network to access vLLM on localhost:8000, OpenWebUI runs on port 8080
+                    environment:
+                      - OPENAI_API_BASE_URL=http://localhost:8000/v1
+                    restart: always
+                    healthcheck:
+                      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+                      interval: 30s
+                      timeout: 10s
+                      retries: 3
+                      start_period: 20s
+
+                volumes:
+                  model-storage:
+                    driver: local
+                  openwebui-data:
+                    driver: local
+
+                networks:
+                  mlops-network:
+                    driver: bridge
