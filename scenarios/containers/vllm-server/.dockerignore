@@ -1,0 +1,5 @@
+# Exclude files from Docker build context
+*.md
+.git
+.gitignore
+*.sh
