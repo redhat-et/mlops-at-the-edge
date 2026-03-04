@@ -1,13 +1,36 @@
 #!/bin/bash
 
+set -eo pipefail
+
 # Prerequisites
 sudo dnf install -y wget
 
 # Install Flightctl
 sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
-sudo dnf install -y flightctl-services-1.0.2-1.fc43.x86_64
-sudo dnf install -y flightctl-cli-1.0.2-1.fc43.x86_64
-sudo dnf install -y flightctl-observability-1.0.2-1.fc43.x86_64
+# sudo dnf install -y flightctl-services-1.1.0~rc3-1.fc43.x86_64
+sudo dnf install -y flightctl-cli-1.1.0~rc3-1.fc43.x86_64
+sudo dnf install -y flightctl-observability-1.1.0~rc3-1.fc43.x86_64
+
+# Install via my fix temporarily to test datasources script and dashboard loading
+sudo dnf install -y make gcc jq git
+
+GO_VERSION="1.26.0"
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
+
+wget -q https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz
+tar -C /usr/local -xzf go${GO_VERSION}.linux-${ARCH}.tar.gz
+
+export PATH=$PATH:/usr/local/go/bin
+export HOME=/root
+export GOPATH=/root/go
+export GOMODCACHE=/root/go/pkg/mod
+export GOCACHE=/root/.cache/go-build
+
+git clone https://github.com/clodaghwalsh17/flightctl.git /opt/flightctl
+cd /opt/flightctl
+git checkout observability-quadlets
+make deploy-quadlets SKIP_BUILD=1 
 
 # Install yq
 VERSION=v4.52.2
@@ -18,8 +41,7 @@ wget https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_${PLATFORM}
 # Set global.baseDomain
 FQDN=$(curl ifconfig.me).nip.io yq -i '.global.baseDomain = strenv(FQDN)' /etc/flightctl/service-config.yaml
 
-# Start Flightctl service
-sudo systemctl enable --now flightctl.target
+sudo systemctl restart flightctl.target
 
 # Add user to PAM issuer
 export USER=mlops
@@ -33,38 +55,16 @@ sudo podman exec -i flightctl-pam-issuer usermod -aG flightctl-admin $USER
 # Login to Flightctl 
 sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u mlops -p mlops123
 
-# Add observability config
-yq -i '
-  .observability.grafana.image = "docker.io/grafana/grafana:latest" |
-  .observability.grafana.published_port = "3000" |
-  .observability.grafana.oauth.enabled = "false" | 
-  .observability.grafana.local_admin_user = "admin" |
-  .observability.grafana.local_admin_password = "admin-password" |
-  .observability.grafana.root_url = "http://localhost:3000" | 
-  .observability.grafana.protocol = "http" |
-  .observability.prometheus.image = "docker.io/prom/prometheus:latest" |
-  .observability.otel_collector.image = "docker.io/otel/opentelemetry-collector-contrib:latest" |
-  .observability.otel_collector.grpc_port = "4317" |
-  .observability.otel_collector.http_port = "4318" |
-  .observability.telemetry_gateway.image = "quay.io/flightctl/flightctl-telemetry-gateway:latest" |
-  .observability.telemetry_gateway.grpc_port = 4317 |
-  .observability.telemetry_gateway.prometheus_port = 9464 |
-  .observability.telemetry_gateway.config.telemetryGateway.export.prometheus = "0.0.0.0:9464" 
-' /etc/flightctl/service-config.yaml
-
-# Render templates
-sudo flightctl-render-observability
-
 # Start observability service
 sudo systemctl enable --now flightctl-observability.target
 
 # Download sample Grafana dashboards provided by the vLLM project
-curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/performance_statistics.json --output-dir /etc/grafana/provisioning/dashboards -O
-curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/query_statistics.json --output-dir /etc/grafana/provisioning/dashboards -O
+curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/performance_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
+curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/query_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
 
 # Prepare script used to configure the Grafana datasources
 
-cat > /etc/grafana/provisioning/datasources/mlops-fleet.yaml << EOF
+cat > /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml << EOF
 apiVersion: 1
 datasources:
 EOF
@@ -85,7 +85,7 @@ get_ips_of_fleet_members() {
 FLEET_MEMBER_IPS=$(get_ips_of_fleet_members mlops)
 for ip in $FLEET_MEMBER_IPS
 do
-  sudo IP=$ip yq -i '.datasources += {"name": "Device " +  strenv(IP), "type": "prometheus", "url": "http://" + strenv(IP) + ".nip.io:9090"}' /etc/grafana/provisioning/datasources/mlops-fleet.yaml
+  sudo IP=$ip yq -i '.datasources += {"name": "Device " +  strenv(IP), "type": "prometheus", "url": "http://" + strenv(IP) + ".nip.io:9090"}' /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml
 done
 
 sudo systemctl restart flightctl-observability.target
