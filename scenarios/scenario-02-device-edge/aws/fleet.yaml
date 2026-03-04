@@ -3,6 +3,8 @@
 # 1. Changed inline compose syntax from "image: inline" with direct YAML to proper "inline" array with "path" and "content" fields
 # 2. Removed all "container_name" fields - FlightCtl doesn't support hardcoded container names
 # 3. Devices must be labeled with "project: mlops" to match the fleet selector below
+# 4. SELinux fix: Use :z (shared) instead of :Z (private) on shared volumes, removed label=disable
+#    Requires: setsebool -P container_use_devices 1 on the host (baked into bootc image)
 apiVersion: flightctl.io/v1beta1
 kind: Fleet
 metadata:
@@ -29,7 +31,7 @@ spec:
                     image: quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
                     command: ["sleep", "infinity"]
                     volumes:
-                      - model-storage:/models:Z
+                      - model-storage:/models:z  # Shaun- lowercase :z = shared SELinux label (multiple containers access this volume)
                     restart: always
                     networks:
                       - mlops-network
@@ -39,15 +41,14 @@ spec:
                     depends_on:
                       - model-car
                     volumes:
-                      - model-storage:/models:ro,Z
+                      - model-storage:/models:ro,z  # Shaun- lowercase :z for shared access, :ro for read-only
                     ports:
                       - "8000:8000"
-                    # Shaun- Critical GPU configuration flags (all three required):
+                    # Shaun- Critical GPU configuration flags (two required):
                     devices:
                       - nvidia.com/gpu=all  # GPU passthrough via CDI
                     shm_size: 2g  # Prevents "Bus error" - vLLM needs shared memory for tensor operations
-                    security_opt:
-                      - label=disable  # Disables SELinux confinement - required for GPU access with CDI
+                    # Shaun- SELinux stays enforced. GPU device access enabled via container_use_devices boolean on host.
                     environment:
                       - LD_LIBRARY_PATH=/usr/lib64  # Forces vLLM to use host CUDA 13.1 libs instead of bundled 12.4
                     restart: always
