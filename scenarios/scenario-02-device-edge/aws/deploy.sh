@@ -39,6 +39,7 @@ FLEET_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=
 aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 2>/dev/null || true    # SSH
 aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 8000 --cidr 0.0.0.0/0 2>/dev/null || true  # vLLM API
 aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0 2>/dev/null || true  # OpenWebUI
+aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 9100 --cidr 0.0.0.0/0 2>/dev/null || true  # Node Exporter (TUI monitoring)
 
 # Launch an instance with a fedora image and install Flightctl using user data script (shwalsh- prefix)
 NAME=shwalsh-flightctl-instance
@@ -83,9 +84,10 @@ echo "Successfully logged into FlightCtl"
 
 AGENT_CONFIG=$(flightctl certificate request --signer=enrollment --expiration=365d --output=embedded)
 
-# Shaun- Updated to use custom bootc AMI (mlops-bootc-rhel10-nvidia v1.0.8) with FlightCtl agent, NVIDIA drivers 590+, and CUDA 13.1
+# Shaun- Updated to use custom bootc AMI (mlops-bootc-rhel10-nvidia v1.0.9) with FlightCtl agent, NVIDIA drivers 590+, CUDA 13.1,
+# container_use_devices SELinux boolean, and node_exporter enabled for TUI monitoring
 # AMI id for a custom built RHEL image with the Flightctl agent and Nvidia drivers preinstalled
-RHEL_AMI_ID=ami-03801f728fb544522
+RHEL_AMI_ID=ami-04c886bb80c94d833
 # Shaun- Changed from t3.xlarge to g5.xlarge for GPU support (NVIDIA A10G 24GB)
 GPU_INSTANCE_TYPE=g5.xlarge
 
