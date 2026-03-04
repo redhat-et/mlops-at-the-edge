@@ -241,8 +241,9 @@ ExecStart=/usr/local/bin/node_exporter
 WantedBy=multi-user.target
 EOF
 
-# Shaun- Node exporter installed but NOT enabled (use otel_collector instead)
-# Enable manually if needed: systemctl enable node_exporter.service
+# Shaun- Enable node_exporter for Luigi's TUI monitoring (v1.0.9)
+# Exposes system metrics on port 9100/metrics (Prometheus format)
+RUN systemctl enable node_exporter.service
 
 # =============================================================================
 # SECTION 4.6: OpenTelemetry Collector for Metrics/Traces/Logs
