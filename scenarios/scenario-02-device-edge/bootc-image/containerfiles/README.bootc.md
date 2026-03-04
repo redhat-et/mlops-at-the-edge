@@ -2,8 +2,8 @@
 
 RHEL 10 bootc image for AWS EC2 g5.xlarge instances with NVIDIA A10G GPU support, FlightCtl agent, and Podman runtime.
 
-**Current Version:** v1.0.8
-**AMI:** ami-03801f728fb544522 (eu-north-1)
+**Current Version:** v1.0.9
+**AMI:** TBD (rebuild required)
 
 ---
 
@@ -25,7 +25,7 @@ RHEL 10 bootc image for AWS EC2 g5.xlarge instances with NVIDIA A10G GPU support
 ```
 Containerfile.bootc + configs/
     ↓ podman build (on x86_64 build instance)
-OCI image → quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.8
+OCI image → quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.9
     ↓ bootc-image-builder --type ami
 disk.raw → EBS volume → snapshot → AMI
     ↓ deploy.sh (aws/ folder)
@@ -49,7 +49,7 @@ This image is the **OS only**. The application (model-car, vLLM, OpenWebUI) is d
 ### 1. Build OCI Image
 
 ```bash
-export VERSION=v1.0.8
+export VERSION=v1.0.9
 export OCI_IMAGE_REPO=quay.io/redhat-et/mlops-bootc-rhel10-nvidia
 
 cd scenarios/scenario-02-device-edge/bootc-image
@@ -100,6 +100,23 @@ containerfiles/
     ├── containers.conf                # Podman capabilities for GPU workloads
     └── nvidia-cdi-generate.service    # First-boot systemd service: generates
                                        # /etc/cdi/nvidia.yaml for GPU passthrough
+```
+
+---
+
+## SELinux and GPU Containers
+
+GPU containers typically require `--security-opt=label=disable` to bypass SELinux label enforcement for device access. This image eliminates that workaround using two changes:
+
+1. **`container_use_devices` boolean** (baked into image) - allows containers to access GPU devices via CDI while SELinux remains enforced
+2. **`:z` shared volume labels** (set in fleet.yaml compose) - uses lowercase `:z` instead of `:Z` on shared volumes so multiple containers (model-car and vLLM) can both access the `model-storage` volume under SELinux
+
+This means vLLM runs with full SELinux confinement - no security exceptions required.
+
+```bash
+# Verify the boolean is set
+getsebool container_use_devices
+# Expected: container_use_devices --> on
 ```
 
 ---
