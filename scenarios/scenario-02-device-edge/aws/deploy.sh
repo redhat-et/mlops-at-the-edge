@@ -62,7 +62,6 @@ FLIGHTCTL_INSTANCE_ID=$(aws ec2 run-instances \
     --query 'Instances[0].InstanceId' --output text)
 
 # Wait for instance to be running before fetching IP to avoid getting empty/None IP
-echo "Waiting for FlightCtl instance ${FLIGHTCTL_INSTANCE_ID} to be running..."
 aws ec2 wait instance-running --instance-ids $FLIGHTCTL_INSTANCE_ID --region $AWS_REGION
 
 # Get instance IP address
@@ -70,7 +69,11 @@ FLIGHTCTL_INSTANCE_IP=$(aws ec2 describe-instances \
     --instance-ids $FLIGHTCTL_INSTANCE_ID \
     --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
 
-echo "FlightCtl instance IP: ${FLIGHTCTL_INSTANCE_IP}"
+# Wait for cloud init to complete
+sleep 90s 
+ssh ${FLIGHTCTL_INSTANCE_USERNAME}@${FLIGHTCTL_INSTANCE_IP} -i $SSH_KEY_FILE -o StrictHostKeyChecking=no cloud-init status --wait
+
+echo "FlightCtl instance (${FLIGHTCTL_INSTANCE_ID}) configured and running at the IP address ${FLIGHTCTL_INSTANCE_IP}"
 
 # Create a Flightctl fleet
 echo "Attempting to login to FlightCtl at: https://${FLIGHTCTL_INSTANCE_IP}.nip.io:3443"
@@ -103,12 +106,9 @@ for device in ${DEVICES[@]}
 do
     cat > /tmp/fleet-user-data.txt <<EOF
 #!/bin/bash
-echo "curl ifconfig.me" >> /usr/lib/flightctl/custom-info.d/publicIP
 cat > /etc/flightctl/config.yaml <<'CONFIGEOF'
 ${ENROLLMENT_SERVICE_CONFIG}
-system-info-custom: [publicIP]
 CONFIGEOF
-systemctl restart flightctl-agent.service
 EOF
 
     aws ec2 run-instances \
@@ -165,6 +165,19 @@ done
 echo ""
 echo "Waiting for devices to complete enrollment..."
 sleep 10
+
+# Create an alias for each device
+echo ""
+echo "Adding alias to devices..."
+DEVICES=$(flightctl get devices -o name)
+for device in $DEVICES
+do
+    DEVICE_SPEC_FILE=$device.yaml
+    flightctl get device $device -o yaml > $DEVICE_SPEC_FILE
+    HOSTNAME=$(yq '.status.systemInfo.hostname' < $DEVICE_SPEC_FILE) yq -i '.metadata.labels.alias = strenv(HOSTNAME)' $DEVICE_SPEC_FILE
+    flightctl apply -f $DEVICE_SPEC_FILE 
+    rm $DEVICE_SPEC_FILE
+done
 
 # Apply fleet configuration to enrolled devices
 echo ""

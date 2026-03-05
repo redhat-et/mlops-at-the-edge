@@ -69,18 +69,20 @@ apiVersion: 1
 datasources:
 EOF
 
-cat > /opt/set-grafana-datasources.sh << EOF
+cat > /opt/set-grafana-datasources.sh << 'EOF'
 #! /bin/bash
 get_ips_of_fleet_members() {
     device_names=$(sudo flightctl get device --field-selector=metadata.owner=Fleet/"$1" -o name)
     ips=()
     for device_name in $device_names
     do
-        ip=$(sudo flightctl get device $device_name -o yaml | yq '.status.systemInfo.customInfo.publicIp')
+        ip=$(sudo flightctl console device/$device_name -- curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
         ips+=( $ip )
     done
     echo "${ips[@]}"
 }
+
+sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u mlops -p mlops123
 
 FLEET_MEMBER_IPS=$(get_ips_of_fleet_members mlops)
 for ip in $FLEET_MEMBER_IPS
