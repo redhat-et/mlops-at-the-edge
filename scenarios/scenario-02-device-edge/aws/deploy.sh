@@ -31,7 +31,7 @@ aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port
 # Expose Flightctl UI
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 2>/dev/null || true
 # Expose Grafana dashboard
-aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 -cidr 0.0.0.0/0 2>/dev/null || true
+aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 --cidr 0.0.0.0/0 2>/dev/null || true
 
 # Create separate security group for MLOps fleet devices (vLLM + OpenWebUI) 
 FLEET_SG_NAME=mlops-fleet-sg
@@ -164,7 +164,7 @@ done
 # Wait for devices to be enrolled and appear in device list
 echo ""
 echo "Waiting for devices to complete enrollment..."
-sleep 10
+sleep 30
 
 # Create an alias for each device
 echo ""
@@ -217,4 +217,6 @@ echo "Once deployed, services will be available at:"
 echo "  - OpenWebUI: http://<device-public-ip>:8080"
 echo "  - vLLM API: http://<device-public-ip>:8000/health"
 echo ""
+echo "FlightCtl fleet metrics including application metrics are available on the Grafana dashboard at:"
+echo "  - UI: https://${FLIGHTCTL_INSTANCE_IP}.nip.io:3000 (username: admin, password: admin)"
 echo "=========================================="
