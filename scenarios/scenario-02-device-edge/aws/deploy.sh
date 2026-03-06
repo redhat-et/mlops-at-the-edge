@@ -188,9 +188,6 @@ echo "✓ Fleet configuration applied"
 # Wait a moment for fleet to be processed
 sleep 5
 
-# Call script to populate the Grafana datasources with the members of the MLOps fleet
-ssh ${FLIGHTCTL_INSTANCE_USERNAME}@${FLIGHTCTL_INSTANCE_IP} -i $SSH_KEY_FILE -o StrictHostKeyChecking=no /opt/set-grafana-datasources.sh
-
 # Deployment summary and access information
 echo ""
 echo "=========================================="

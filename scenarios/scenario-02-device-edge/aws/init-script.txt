@@ -32,40 +32,9 @@ sudo podman exec flightctl-pam-issuer adduser $USER && \
 sudo podman exec -i flightctl-pam-issuer sh -c "echo \"$USER:$PASSWORD\" | chpasswd" && \
 sudo podman exec -i flightctl-pam-issuer usermod -aG flightctl-admin $USER
 
-# Login to Flightctl 
-sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u mlops -p mlops123
+# Download sample Grafana dashboards provided by the vLLM project
+curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/observability/scenarios/scenario-02-device-edge/dashboards/performance_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
+curl https://github.com/redhat-et/mlops-at-the-edge/blob/observability/scenarios/scenario-02-device-edge/dashboards/query_stastics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
 
 # Start observability service
 sudo systemctl enable --now flightctl-observability.target
-
-# Download sample Grafana dashboards provided by the vLLM project
-curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/performance_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
-curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/examples/online_serving/dashboards/grafana/query_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
-
-# Prepare script used to configure the Grafana datasources
-
-cat > /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml << EOF
-apiVersion: 1
-datasources: []
-EOF
-
-cat > /opt/set-grafana-datasources.sh << 'EOF'
-#! /bin/bash
-FLIGHTCTL_USERNAME=mlops
-FLIGHTCTL_PASSWORD=mlops123
-FLIGHTCTL_FLEET=mlops
-
-sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u $FLIGHTCTL_USERNAME -p $FLIGHTCTL_PASSWORD
-
-device_names=$(sudo flightctl get device --field-selector=metadata.owner=Fleet/"$FLIGHTCTL_FLEET" -o name)
-for device_name in $device_names
-do
-    ip=$(sudo flightctl console device/$device_name -- curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-    alias=$(sudo flightctl get device $device_name -o yaml | yq '.metadata.labels.alias')
-    sudo NAME=$alias IP=$ip yq -i '.datasources += [{"name": strenv(NAME), "type": "prometheus", "url": "http://" + strenv(IP) + ".nip.io:9090"}]' /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml
-done
-
-sudo systemctl restart flightctl-observability.target
-EOF
-
-sudo chmod +x /opt/set-grafana-datasources.sh
