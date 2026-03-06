@@ -23,31 +23,24 @@ spec:
               content: |
                 version: "3.8"
                 services:
-                  model-car:
+                  model-init:
                     image: quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
-                    command: ["sleep", "infinity"]
-                    volumes:
-                      - model-storage:/models:Z
-                    restart: always
-                    networks:
-                      - mlops-network
+                    command: ["echo", "model image pulled"]
 
                   vllm-server:
                     image: quay.io/redhat-et/vllm-server:latest
-                    depends_on:
-                      - model-car
                     volumes:
-                      - model-storage:/models:ro,Z
+                      - model-image:/models:ro
                     ports:
                       - "8000:8000"
-                    # Critical GPU configuration flags (all three required):
                     devices:
-                      - nvidia.com/gpu=all  # GPU passthrough via CDI
-                    shm_size: 2g  # Prevents "Bus error" - vLLM needs shared memory for tensor operations
+                      - nvidia.com/gpu=all
+                    shm_size: 2g
                     security_opt:
-                      - label=disable  # Disables SELinux confinement - required for GPU access with CDI
+                      - label=disable
                     environment:
-                      - LD_LIBRARY_PATH=/usr/lib64  # Forces vLLM to use host CUDA 13.1 libs instead of bundled 12.4
+                      - LD_LIBRARY_PATH=/usr/lib64
+                    command: ["--model", "/models/models", "--served-model-name", "Llama-3.2-1B-Instruct"]
                     restart: always
                     networks:
                       - mlops-network
@@ -64,7 +57,7 @@ spec:
                       - vllm-server
                     volumes:
                       - openwebui-data:/app/backend/data:Z
-                    network_mode: host  # Uses host network to access vLLM on localhost:8000, OpenWebUI runs on port 8080
+                    network_mode: host
                     environment:
                       - OPENAI_API_BASE_URL=http://localhost:8000/v1
                     restart: always
@@ -76,8 +69,10 @@ spec:
                       start_period: 20s
 
                 volumes:
-                  model-storage:
-                    driver: local
+                  model-image:
+                    driver: image
+                    driver_opts:
+                      image: quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
                   openwebui-data:
                     driver: local
 
