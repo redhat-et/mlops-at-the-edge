@@ -7,30 +7,9 @@ sudo dnf install -y wget
 
 # Install Flightctl
 sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
-# sudo dnf install -y flightctl-services-1.1.0~rc3-1.fc43.x86_64
-sudo dnf install -y flightctl-cli-1.1.0~rc3-1.fc43.x86_64
-sudo dnf install -y flightctl-observability-1.1.0~rc3-1.fc43.x86_64
-
-# Install via my fix temporarily to test datasources script and dashboard loading
-sudo dnf install -y make gcc jq git
-
-GO_VERSION="1.26.0"
-ARCH=$(uname -m)
-if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
-
-wget -q https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz
-tar -C /usr/local -xzf go${GO_VERSION}.linux-${ARCH}.tar.gz
-
-export PATH=$PATH:/usr/local/go/bin
-export HOME=/root
-export GOPATH=/root/go
-export GOMODCACHE=/root/go/pkg/mod
-export GOCACHE=/root/.cache/go-build
-
-git clone https://github.com/clodaghwalsh17/flightctl.git /opt/flightctl
-cd /opt/flightctl
-git checkout observability-quadlets
-make deploy-quadlets SKIP_BUILD=1 
+sudo dnf install -y flightctl-services-1.1.0~rc4-1.fc43.x86_64
+sudo dnf install -y flightctl-cli-1.1.0~rc4-1.fc43.x86_64
+sudo dnf install -y flightctl-observability-1.1.0~rc4-1.fc43.x86_64
 
 # Install yq
 VERSION=v4.52.2
@@ -41,7 +20,8 @@ wget https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_${PLATFORM}
 # Set global.baseDomain
 FQDN=$(curl ifconfig.me).nip.io yq -i '.global.baseDomain = strenv(FQDN)' /etc/flightctl/service-config.yaml
 
-sudo systemctl restart flightctl.target
+# Start Flightctl service
+sudo systemctl enable --now flightctl.target
 
 # Add user to PAM issuer
 export USER=mlops
@@ -66,28 +46,23 @@ curl https://raw.githubusercontent.com/vllm-project/vllm/refs/heads/main/example
 
 cat > /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml << EOF
 apiVersion: 1
-datasources:
+datasources: []
 EOF
 
 cat > /opt/set-grafana-datasources.sh << 'EOF'
 #! /bin/bash
-get_ips_of_fleet_members() {
-    device_names=$(sudo flightctl get device --field-selector=metadata.owner=Fleet/"$1" -o name)
-    ips=()
-    for device_name in $device_names
-    do
-        ip=$(sudo flightctl console device/$device_name -- curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-        ips+=( $ip )
-    done
-    echo "${ips[@]}"
-}
+FLIGHTCTL_USERNAME=mlops
+FLIGHTCTL_PASSWORD=mlops123
+FLIGHTCTL_FLEET=mlops
 
-sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u mlops -p mlops123
+sudo flightctl login -k https://$(curl ifconfig.me).nip.io:3443 -u $FLIGHTCTL_USERNAME -p $FLIGHTCTL_PASSWORD
 
-FLEET_MEMBER_IPS=$(get_ips_of_fleet_members mlops)
-for ip in $FLEET_MEMBER_IPS
+device_names=$(sudo flightctl get device --field-selector=metadata.owner=Fleet/"$FLIGHTCTL_FLEET" -o name)
+for device_name in $device_names
 do
-  sudo IP=$ip yq -i '.datasources += {"name": "Device " +  strenv(IP), "type": "prometheus", "url": "http://" + strenv(IP) + ".nip.io:9090"}' /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml
+    ip=$(sudo flightctl console device/$device_name -- curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+    alias=$(sudo flightctl get device $device_name -o yaml | yq '.metadata.labels.alias')
+    sudo NAME=$alias IP=$ip yq -i '.datasources += [{"name": strenv(NAME), "type": "prometheus", "url": "http://" + strenv(IP) + ".nip.io:9090"}]' /etc/flightctl/flightctl-grafana/provisioning/datasources/mlops-fleet.yaml
 done
 
 sudo systemctl restart flightctl-observability.target
