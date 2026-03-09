@@ -30,6 +30,8 @@ aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 8444 --cidr 0.0.0.0/0 2>/dev/null || true
 # Expose Flightctl UI
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 2>/dev/null || true
+# Allow access to Flightctl Telemetry Gateway
+aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 4317 --cidr 0.0.0.0/0 2>/dev/null || true
 # Expose Grafana dashboard
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 --cidr 0.0.0.0/0 2>/dev/null || true
 

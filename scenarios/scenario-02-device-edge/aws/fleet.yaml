@@ -12,10 +12,6 @@ spec:
         fleet: mlops
     spec:      
       applications:
-        - name: observability-stack
-          image: quay.io/clwalsh/observability-stack:v4
-          appType: compose
-          runAs: flightctl
         - name: mlops-gpu-stack
           appType: compose
           inline:
