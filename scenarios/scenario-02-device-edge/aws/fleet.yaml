@@ -38,7 +38,7 @@ spec:
                     shm_size: 2g
                     environment:
                       - LD_LIBRARY_PATH=/usr/lib64
-                    command: ["--model", "/models/models", "--served-model-name", "Llama-3.2-1B-Instruct"]
+                    command: ["vllm", "serve", "/models/models", "--served-model-name", "Llama-3.2-1B-Instruct"]
                     restart: always
                     networks:
                       - mlops-network
