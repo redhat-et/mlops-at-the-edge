@@ -25,10 +25,13 @@ ENV MODEL_PATH=/models \
     VLLM_PORT=8000 \
     VLLM_HOST=0.0.0.0
 
-# Default command - expects model at /models (mounted from model car)
-# Using shell form to allow environment variable expansion
-CMD vllm serve "$MODEL_PATH" \
-    --host "$VLLM_HOST" \
-    --port "$VLLM_PORT" \
-    --dtype bfloat16 \
-    --max-model-len 16384
+# Reset base image entrypoint so the image is not locked to a single vllm subcommand.
+# Callers can now run any vllm command (serve, bench, etc.) via compose command field.
+ENTRYPOINT []
+
+# Default: start the inference server. Override in compose to run bench, etc.
+CMD ["vllm", "serve", "/models", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--dtype", "bfloat16", \
+     "--max-model-len", "16384"]
