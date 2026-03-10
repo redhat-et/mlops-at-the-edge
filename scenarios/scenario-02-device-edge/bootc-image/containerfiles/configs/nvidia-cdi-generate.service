@@ -1,0 +1,25 @@
+[Unit]
+Description=Generate NVIDIA CDI Configuration
+Documentation=https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/
+After=multi-user.target
+ConditionPathExists=!/etc/cdi/nvidia.yaml
+ConditionPathExists=/dev/nvidia0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Generate CDI (Container Device Interface) configuration
+# This allows Podman to passthrough GPU to containers via --device nvidia.com/gpu=all
+ExecStart=/usr/bin/nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+
+StandardOutput=journal+console
+StandardError=journal+console
+
+# Retry on failure (GPU may not be fully initialized yet)
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

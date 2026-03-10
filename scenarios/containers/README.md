@@ -66,16 +66,18 @@ This guide covers:
 sudo podman volume create model-storage
 
 # Container 1: modelcar writes to volume
-sudo podman run --volume model-storage:/models:Z ...
-# :Z = SELinux relabel for container access
+sudo podman run --volume model-storage:/models:z ...
+# :z = shared SELinux label (multiple containers can access)
 
 # Container 2: vllm-server reads from same volume
-sudo podman run --volume model-storage:/models:ro,Z ...
+sudo podman run --volume model-storage:/models:ro,z ...
 # :ro = read-only mount (vLLM doesn't modify models)
-# :Z = SELinux relabel
+# :z = shared SELinux label
 ```
 
 Both containers see the same files at `/models`, but modelcar can write and vllm-server can only read.
+
+**Important:** Use lowercase `:z` (shared) not uppercase `:Z` (private) when multiple containers share a volume. `:Z` relabels the volume for exclusive access by one container, which would lock out the other.
 
 ### Network Diagram
 
@@ -119,6 +121,7 @@ The bootc image includes:
 - ✅ CDI configuration (`/etc/cdi/nvidia.yaml`)
 - ✅ FlightCtl agent (for GitOps deployment)
 - ✅ podman-compose (for stack management)
+- ✅ `container_use_devices` SELinux boolean (GPU access without disabling SELinux)
 
 **Hardware requirements:**
 - NVIDIA GPU with 4GB+ VRAM (tested on A10G with 24GB)
@@ -220,13 +223,13 @@ local       openwebui-data
 ```bash
 sudo podman run -d \
   --name model-car \
-  --volume model-storage:/models:Z \
+  --volume model-storage:/models:z \
   quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0 \
   sleep infinity
 ```
 
 **Key flags:**
-- `--volume model-storage:/models:Z` - Mounts volume with SELinux relabeling
+- `--volume model-storage:/models:z` - Mounts volume with shared SELinux label (lowercase `:z` allows other containers to access)
 - `sleep infinity` - Keeps container running to share model files
 
 **Verify container is running:**
@@ -265,11 +268,10 @@ drwxr-xr-x. 4 root root       4096 Feb 11 14:20 .
 ```bash
 sudo podman run -d \
   --name vllm-server \
-  --volume model-storage:/models:ro,Z \
+  --volume model-storage:/models:ro,z \
   --publish 8000:8000 \
   --device nvidia.com/gpu=all \
   --shm-size=2g \
-  --security-opt=label=disable \
   --env LD_LIBRARY_PATH=/usr/lib64 \
   quay.io/redhat-et/vllm-server:latest \
   vllm serve /models
@@ -277,15 +279,16 @@ sudo podman run -d \
 
 **Critical flags explained:**
 
-1. **`--volume model-storage:/models:ro,Z`**
+1. **`--volume model-storage:/models:ro,z`**
    - Shares model files from model-car container
    - `:ro` = read-only (vLLM doesn't modify models)
-   - `:Z` = SELinux relabeling for container access
+   - `:z` = shared SELinux label (matches model-car's volume mount)
 
 2. **`--device nvidia.com/gpu=all`**
    - GPU passthrough via CDI (Container Device Interface)
    - Gives container access to ALL GPUs (use `=0` for specific GPU)
    - Requires CDI configuration at `/etc/cdi/nvidia.yaml`
+   - Requires `container_use_devices` SELinux boolean (set in bootc image)
 
 3. **`--shm-size=2g`**
    - Increases shared memory from default 64MB to 2GB
@@ -302,6 +305,8 @@ sudo podman run -d \
    - Forces vLLM to use host's CUDA libraries instead of bundled version
    - Without this: "CUDA driver version is insufficient" error (Error 803)
 
+**Note:** No `--security-opt=label=disable` needed. The bootc image sets the `container_use_devices` SELinux boolean, which allows GPU device access while keeping SELinux fully enforced.
+
 **Optional: Runtime Configuration via Environment Variables**
 
 The vLLM server supports runtime configuration through environment variables:
@@ -310,11 +315,10 @@ The vLLM server supports runtime configuration through environment variables:
 # Example: Change port and model location
 sudo podman run -d \
   --name vllm-server \
-  --volume model-storage:/models:ro,Z \
+  --volume model-storage:/models:ro,z \
   --publish 9000:9000 \
   --device nvidia.com/gpu=all \
   --shm-size=2g \
-  --security-opt=label=disable \
   --env LD_LIBRARY_PATH=/usr/lib64 \
   --env VLLM_PORT=9000 \
   --env VLLM_HOST=0.0.0.0 \

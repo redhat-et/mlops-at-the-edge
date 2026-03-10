@@ -51,4 +51,7 @@ Thumbs.db
 
 # Claude
 claude.md
+
+# Flightctl
 flightctl-docs
+flightctl-config.yaml
