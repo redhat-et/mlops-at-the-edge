@@ -29,6 +29,7 @@ spec:
 
                   vllm-server:
                     image: quay.io/redhat-et/vllm-server:latest
+                    pull_policy: always
                     volumes:
                       - model-image:/models:ro
                     ports:
@@ -48,9 +49,19 @@ spec:
                       timeout: 10s
                       retries: 3
                       start_period: 90s
+                  
+                  vllm-bench:
+                    image: quay.io/redhat-et/vllm-server:latest
+                    pull_policy: always
+                    depends_on:
+                      - vllm-server
+                    command: ["vllm", "bench", "serve", "--host", "0.0.0.0", "--model", "Llama-3.2-1B-Instruct", "--request-rate", "3.0"]
+                    networks:
+                      - mlops-network
 
                   openwebui:
                     image: quay.io/redhat-et/openwebui:latest
+                    pull_policy: always
                     depends_on:
                       - vllm-server
                     volumes:
