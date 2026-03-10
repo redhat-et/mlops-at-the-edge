@@ -77,8 +77,8 @@
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
-          "expr": "sum by (model_name) (\n  rate(vllm_request_success_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])\n)",
-          "interval": "1",
+          "expr": "sum by (model_name) (\n  rate(vllm_request_success_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])\n)",
+          "interval": "",
           "legendFormat": "{{model_name}}",
           "range": true,
           "refId": "A"
@@ -118,7 +118,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(vllm_request_success_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum(rate(vllm_request_success_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -160,7 +161,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le, model_name) (rate(vllm_e2e_request_latency_seconds_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by(le, model_name) (rate(vllm_e2e_request_latency_seconds_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -202,7 +204,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le, model_name) (rate(vllm_e2e_request_latency_seconds_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.90, sum by(le, model_name) (rate(vllm_e2e_request_latency_seconds_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -244,7 +247,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le, model_name) (rate(vllm_e2e_request_latency_seconds_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le, model_name) (rate(vllm_e2e_request_latency_seconds_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -292,7 +296,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum by (le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "{{model_name}} le={{le}}",
           "range": true,
           "refId": "A"
@@ -334,7 +339,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.90, sum by(le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -376,7 +382,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by(le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -418,7 +425,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))\n/\nsum(rate(vllm_request_success_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum(rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))\n/\nsum(rate(vllm_request_success_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -460,7 +468,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le, model_name) (rate(vllm_request_prompt_tokens_bucket{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval])))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -523,7 +532,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (model_name) (rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum by (model_name) (rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "{{model_name}}",
           "range": true,
           "refId": "A"
@@ -565,7 +575,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum(rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -628,7 +639,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (model_name) (rate(vllm_generation_tokens_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum by (model_name) (rate(vllm_generation_tokens_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "{{model_name}}",
           "range": true,
           "refId": "A"
@@ -670,7 +682,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(vllm_generation_tokens_total{job=\"flightctl-telemetry-gateway\"}{model_name=~\"$Deployment_id\"}[$__rate_interval]))",
+          "expr": "sum(rate(vllm_generation_tokens_total{job=\"flightctl-telemetry-gateway\", model_name=~\"$Model_Name\"}[$__rate_interval]))",
+          "interval": "",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -686,7 +699,6 @@
   "templating": {
     "list": [
       {
-        "current": { "text": "Prometheus", "value": "4184fc20-68a7-483a-8d9b-7caa59c680dd" },
         "label": "datasource",
         "name": "DS_PROMETHEUS",
         "options": [],
@@ -698,9 +710,9 @@
         "current": { "text": ["All"], "value": ["$__all"] },
         "definition": "label_values(vllm_request_success_total,model_name)",
         "includeAll": true,
-        "label": "Deployment_ID",
+        "label": "Model_Name",
         "multi": true,
-        "name": "Deployment_id",
+        "name": "Model_Name",
         "options": [],
         "query": {
           "qryType": 1,
@@ -710,41 +722,6 @@
         "refresh": 1,
         "regex": "",
         "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": { "text": "All hours", "value": "All hours" },
-        "hide": 2,
-        "label": "Rush Hours Only",
-        "name": "rush_hours",
-        "options": [
-          { "selected": true, "text": "false", "value": "All hours" },
-          { "selected": false, "text": "true", "value": "Rush hours" }
-        ],
-        "query": "false : All hours, true : Rush hours",
-        "type": "custom"
-      },
-      {
-        "current": { "text": "All", "value": "All" },
-        "hide": 2,
-        "label": "Rush Hours Type",
-        "name": "rush_hours_type",
-        "options": [
-          { "selected": true, "text": "^All__.*$", "value": "All" },
-          { "selected": false, "text": "^Static__.*$", "value": "Static" },
-          { "selected": false, "text": "^Dynamic__.*$", "value": "Dynamic" }
-        ],
-        "query": "^All__.*$ : All, ^Static__.*$ : Static, ^Dynamic__.*$ : Dynamic",
-        "type": "custom"
-      },
-      {
-        "current": { "text": "", "value": "" },
-        "hide": 2,
-        "name": "query0",
-        "options": [],
-        "query": "",
-        "refresh": 1,
-        "regex": "",
         "type": "query"
       }
     ]
