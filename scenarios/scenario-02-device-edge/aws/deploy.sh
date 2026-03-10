@@ -3,7 +3,7 @@
 export AWS_REGION=eu-north-1
 
 # Create key pair for accessing the instances
-SSH_KEY_NAME=mlops
+SSH_KEY_NAME=compose-test-mlops
 SSH_KEY_FILE=$SSH_KEY_NAME.pem
 aws ec2 create-key-pair --key-name $SSH_KEY_NAME --query 'KeyMaterial' --output text > $SSH_KEY_FILE
 chmod 400 $SSH_KEY_FILE
@@ -17,8 +17,8 @@ SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=availability-zone,Values=$(
 VPC_ID=$(aws ec2 describe-subnets --subnet-ids $SUBNET_ID --query 'Subnets[0].VpcId' --output text)
 
 # Create a security group for the flightctl instance
-SG_NAME=flightctl-sg
-aws ec2 create-security-group --group-name $SG_NAME --description "Security group for Flightctl instance" --vpc-id $VPC_ID
+SG_NAME=compose-test-flightctl-sg
+aws ec2 create-security-group --group-name $SG_NAME --description "Security group for presentation Flightctl instance" --vpc-id $VPC_ID
 SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=$SG_NAME --query "SecurityGroups[0].GroupId" --output text)
 
 # Enable SSH access
@@ -36,18 +36,19 @@ aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 --cidr 0.0.0.0/0 2>/dev/null || true
 
 # Create separate security group for MLOps fleet devices (vLLM + OpenWebUI) 
-FLEET_SG_NAME=mlops-fleet-sg
-aws ec2 create-security-group --group-name $FLEET_SG_NAME --description "Security group for MLOps fleet devices running vLLM and OpenWebUI" --vpc-id $VPC_ID
+FLEET_SG_NAME=compose-test-mlops-fleet-sg
+aws ec2 create-security-group --group-name $FLEET_SG_NAME --description "Security group for presentation MLOps fleet devices running vLLM and OpenWebUI" --vpc-id $VPC_ID
 FLEET_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values=$FLEET_SG_NAME --query "SecurityGroups[0].GroupId" --output text)
 
 # Fleet security group rules: SSH access + MLOps container ports
 aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 2>/dev/null || true    # SSH
 aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 8000 --cidr 0.0.0.0/0 2>/dev/null || true  # vLLM API
 aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0 2>/dev/null || true  # OpenWebUI
-aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 9090 --cidr 0.0.0.0/0 2>/dev/null || true  # OpenWebUI
+aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 9090 --cidr 0.0.0.0/0 2>/dev/null || true  # Prometheus
+aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp --port 9100 --cidr 0.0.0.0/0 2>/dev/null || true  # Node Exporter
 
 # Launch an instance with a fedora image and install Flightctl using user data script
-NAME=flightctl-instance
+NAME=compose-test-flightctl-instance
 FEDORA_AMI_ID=ami-00591e9b6ab674470
 FLIGHTCTL_INSTANCE_USERNAME=fedora
 
@@ -93,7 +94,7 @@ echo "Successfully logged into FlightCtl"
 ENROLLMENT_SERVICE_CONFIG=$(flightctl certificate request --signer=enrollment --expiration=365d --output=embedded)
 
 # AMI id for a custom built RHEL image with the Flightctl agent and Nvidia drivers preinstalled
-RHEL_AMI_ID=ami-04c886bb80c94d833
+RHEL_AMI_ID=ami-03f63d54aa5e66764
 # Use g5.xlarge for GPU support (NVIDIA A10G 24GB)
 GPU_INSTANCE_TYPE=g5.xlarge
 
@@ -103,7 +104,8 @@ GPU_SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=availability-zone,Value
 echo "Launching fleet devices with AMI: ${RHEL_AMI_ID} and instance type: ${GPU_INSTANCE_TYPE}"
 echo "Using GPU-compatible subnet: ${GPU_SUBNET_ID}"
 
-DEVICES=("flightctl-device-1" "flightctl-device-2")
+DEVICES=("compose-test-flightctl-device-1" "compose-test-flightctl-device-2")
+
 for device in ${DEVICES[@]}
 do
     cat > /tmp/fleet-user-data.txt <<EOF
@@ -203,7 +205,7 @@ echo ""
 echo "Fleet Devices:"
 echo "  - 2 x g5.xlarge instances with AMI ${RHEL_AMI_ID}"
 echo "  - RHEL 10 + NVIDIA drivers 590.48.01 + CUDA 13.1 + FlightCtl agent"
-echo "  - Deploying 3-container MLOps stack: model-car + vLLM + OpenWebUI"
+echo "  - Deploying 2-container MLOps stack: vLLM (with modelcar image volume) + OpenWebUI"
 echo "  - Deploying Observability stack: Prometheus"
 echo ""
 echo "To check fleet status:"

@@ -2,10 +2,10 @@
 
 export AWS_REGION=eu-north-1
 
-aws ec2 delete-key-pair --key-name mlops
-sudo rm mlops.pem
+aws ec2 delete-key-pair --key-name compose-test-mlops --region $AWS_REGION
+rm -f compose-test-mlops.pem
 
-EC2_INSTANCE_NAMES=("flightctl-instance" "flightctl-device-1" "flightctl-device-2")
+EC2_INSTANCE_NAMES=("compose-test-flightctl-instance" "compose-test-flightctl-device-1" "compose-test-flightctl-device-2")
 
 for instance_name in "${EC2_INSTANCE_NAMES[@]}"
 do
@@ -14,5 +14,5 @@ do
     aws ec2 wait instance-terminated --instance-ids $INSTANCE_ID
 done
 
-aws ec2 delete-security-group --group-name flightctl-sg
-aws ec2 delete-security-group --group-name mlops-fleet-sg
+aws ec2 delete-security-group --group-name compose-test-flightctl-sg --region $AWS_REGION
+aws ec2 delete-security-group --group-name compose-test-mlops-fleet-sg --region $AWS_REGION
