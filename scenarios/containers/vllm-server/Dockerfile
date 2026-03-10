@@ -25,12 +25,12 @@ ENV MODEL_PATH=/models \
     VLLM_PORT=8000 \
     VLLM_HOST=0.0.0.0
 
-# Reset base image entrypoint so the image is not locked to a single vllm subcommand.
-# Callers can now run any vllm command (serve, bench, etc.) via compose command field.
-ENTRYPOINT []
+# Set entrypoint to vllm CLI so callers can run any subcommand (serve, bench, etc.)
+# Compose/quadlet command fields only need to specify subcommand and arguments
+ENTRYPOINT ["vllm"]
 
 # Default: start the inference server. Override in compose to run bench, etc.
-CMD ["vllm", "serve", "/models", \
+CMD ["serve", "/models", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--dtype", "bfloat16", \
