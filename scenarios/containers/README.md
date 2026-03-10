@@ -271,7 +271,8 @@ sudo podman run -d \
   --shm-size=2g \
   --security-opt=label=disable \
   --env LD_LIBRARY_PATH=/usr/lib64 \
-  quay.io/redhat-et/vllm-server:latest
+  quay.io/redhat-et/vllm-server:latest \
+  vllm serve /models
 ```
 
 **Critical flags explained:**
@@ -293,9 +294,8 @@ sudo podman run -d \
 
 4. **`--security-opt=label=disable`**
    - Disables SELinux confinement for this container
-   - **CRITICAL:** Required for GPU access with CDI
-   - Without this: "NVIDIA driver not found" errors
-   - Document this exception in security compliance reviews
+   - Required for GPU access with CDI unless `container_use_devices` SELinux boolean is set on the host
+   - The bootc image (v1.0.9+) sets this boolean, so this flag can be omitted in FlightCtl deployments
 
 5. **`--env LD_LIBRARY_PATH=/usr/lib64`**
    - **CRITICAL WORKAROUND:** vLLM container bundles CUDA 12.4, but host has CUDA 13.1
@@ -319,15 +319,11 @@ sudo podman run -d \
   --env VLLM_PORT=9000 \
   --env VLLM_HOST=0.0.0.0 \
   --env MODEL_PATH=/models \
-  quay.io/redhat-et/vllm-server:latest
+  quay.io/redhat-et/vllm-server:latest \
+  vllm serve /models --port 9000
 ```
 
-**Available environment variables:**
-- `MODEL_PATH` - Path to model directory (default: `/models`)
-- `VLLM_PORT` - Port for vLLM API (default: `8000`)
-- `VLLM_HOST` - Host binding address (default: `0.0.0.0`)
-
-**Note:** Remember to update the `--publish` flag to match `VLLM_PORT` if you change it.
+**Note:** The image entrypoint is unset, so you must pass the full `vllm serve` command. Override flags like `--port`, `--model`, `--served-model-name` directly. Remember to update `--publish` to match if you change the port.
 
 **Monitor startup (takes 60-90 seconds):**
 
