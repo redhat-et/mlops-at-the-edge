@@ -25,12 +25,11 @@ ENV MODEL_PATH=/models \
     VLLM_PORT=8000 \
     VLLM_HOST=0.0.0.0
 
-# Set entrypoint to vllm CLI so callers can run any subcommand (serve, bench, etc.)
-# Compose/quadlet command fields only need to specify subcommand and arguments
-ENTRYPOINT ["vllm"]
+# Reset entrypoint to allow flexible command specification in quadlet/compose
+ENTRYPOINT []
 
-# Default: start the inference server. Override in compose to run bench, etc.
-CMD ["serve", "/models", \
+# Default: start the inference server
+CMD ["vllm", "serve", "/models", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--dtype", "bfloat16", \
