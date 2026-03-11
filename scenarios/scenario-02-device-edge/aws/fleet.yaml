@@ -10,81 +10,106 @@ spec:
     metadata:
       labels:
         fleet: mlops
-    spec:      
+    spec:
       applications:
         - name: mlops-gpu-stack
-          appType: compose
+          appType: quadlet
           inline:
-            - path: podman-compose.yaml
+            - path: model-storage.volume
               content: |
-                version: "3.8"
-                services:
-                  # Dummy service to force podman-compose to pull the modelcar image.
-                  # The model-image volume uses driver: image to mount the OCI image filesystem,
-                  # but podman-compose only pulls images referenced by services, not volumes.
-                  # Without this service, volume creation fails with "image not known".
-                  model-init:
-                    image: quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
-                    command: ["echo", "model image pulled"]
+                [Volume]
+                # Shared volume for model files from model-car init container
+            - path: openwebui-data.volume
+              content: |
+                [Volume]
+                # Local volume for OpenWebUI persistent data
+            - path: mlops.network
+              content: |
+                [Network]
+                # Bridge network for container communication
+            - path: model-car.container
+              content: |
+                [Unit]
+                Description=Model Car Init Container
+                Before=vllm-server.service
 
-                  vllm-server:
-                    image: quay.io/redhat-et/vllm-server:latest
-                    pull_policy: always
-                    volumes:
-                      - model-image:/models:ro
-                    ports:
-                      - "8000:8000"
-                    devices:
-                      - nvidia.com/gpu=all
-                    shm_size: 2g
-                    environment:
-                      - LD_LIBRARY_PATH=/usr/lib64
-                    command: ["vllm", "serve", "/models/models", "--served-model-name", "Llama-3.2-1B-Instruct"]
-                    restart: always
-                    networks:
-                      - mlops-network
-                    healthcheck:
-                      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-                      interval: 30s
-                      timeout: 10s
-                      retries: 3
-                      start_period: 90s
-                  
-                  vllm-bench:
-                    image: quay.io/redhat-et/vllm-server:latest
-                    pull_policy: always
-                    depends_on:
-                      - vllm-server
-                    command: ["vllm", "bench", "serve", "--host", "0.0.0.0", "--model", "Llama-3.2-1B-Instruct", "--request-rate", "3.0"]
-                    networks:
-                      - mlops-network
+                [Container]
+                Image=quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
+                Volume=model-storage.volume:/target:Z
+                PodmanArgs=--user=0
+                Exec=sh -c "cp -r /models/* /target/"
 
-                  openwebui:
-                    image: quay.io/redhat-et/openwebui:latest
-                    pull_policy: always
-                    depends_on:
-                      - vllm-server
-                    volumes:
-                      - openwebui-data:/app/backend/data:Z
-                    network_mode: host
-                    environment:
-                      - OPENAI_API_BASE_URL=http://localhost:8000/v1
-                    restart: always
-                    healthcheck:
-                      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-                      interval: 30s
-                      timeout: 10s
-                      retries: 3
-                      start_period: 20s
+                [Service]
+                Type=oneshot
+                RemainAfterExit=yes
 
-                volumes:
-                  model-image:
-                    driver: image
-                    driver_opts:
-                      image: quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.0
-                  openwebui-data:
-                    driver: local
+                [Install]
+                WantedBy=multi-user.target default.target
+            - path: vllm-server.container
+              content: |
+                [Unit]
+                Description=vLLM GPU Inference Server
+                After=network-online.target model-car.service
 
-                networks:
-                  mlops-network:
-                    driver: bridge
+                [Container]
+                Image=quay.io/redhat-et/vllm-server:latest
+                Volume=model-storage.volume:/models:ro,z
+                PublishPort=8000:8000
+                AddDevice=nvidia.com/gpu=all
+                PodmanArgs=--shm-size=2g --network-alias=vllm-server
+                Environment=LD_LIBRARY_PATH=/usr/lib64
+                Exec=vllm serve /models --served-model-name Llama-3.2-1B-Instruct
+                Network=mlops.network
+                HealthCmd=curl -f http://localhost:8000/health || exit 1
+                HealthInterval=30s
+                HealthTimeout=10s
+                HealthRetries=3
+                HealthStartPeriod=90s
+
+                [Service]
+                Restart=always
+                RestartSec=10
+
+                [Install]
+                WantedBy=multi-user.target default.target
+            - path: vllm-bench.container
+              content: |
+                [Unit]
+                Description=vLLM Benchmark Load Generator
+                After=vllm-server.service
+
+                [Container]
+                Image=quay.io/redhat-et/vllm-server:latest
+                Volume=model-storage.volume:/models:ro,z
+                Network=mlops.network
+                Exec=sh -c "sleep 120 && vllm bench serve --base-url http://vllm-server:8000 --model Llama-3.2-1B-Instruct --tokenizer /models --request-rate 3.0"
+
+                [Service]
+                Type=oneshot
+
+                [Install]
+                WantedBy=multi-user.target default.target
+            - path: openwebui.container
+              content: |
+                [Unit]
+                Description=OpenWebUI Chat Frontend
+                After=network-online.target vllm-server.service
+                Requires=vllm-server.service
+
+                [Container]
+                Image=quay.io/redhat-et/openwebui:latest
+                Volume=openwebui-data.volume:/app/backend/data:Z
+                Network=host
+                Environment=OPENAI_API_BASE_URL=http://localhost:8000/v1
+                HealthCmd=curl -f http://localhost:8080/health || exit 1
+                HealthInterval=30s
+                HealthTimeout=10s
+                HealthRetries=3
+                HealthStartPeriod=20s
+
+                [Service]
+                Restart=always
+                RestartSec=10
+
+                [Install]
+                WantedBy=multi-user.target default.target
