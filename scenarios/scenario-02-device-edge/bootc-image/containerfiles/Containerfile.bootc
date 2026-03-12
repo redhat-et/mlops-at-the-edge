@@ -171,18 +171,22 @@ RUN NODE_EXPORTER_VERSION="1.8.2" && \
     rm /tmp/node_exporter.tar.gz && \
     useradd -rs /bin/false node_exporter
 
-COPY configs/node_exporter.service /etc/systemd/system/node_exporter.service 
+COPY containerfiles/configs/node_exporter.service /etc/systemd/system/node_exporter.service 
 RUN systemctl enable node_exporter.service
 
 # OpenTelemetry Collector - collects host metrics, forwards to Prometheus/OTLP
-RUN dnf install -y opentelemetry-collector
-RUN mkdir -p /etc/otelcol/certs
-RUN mkdir -p /etc/flightctl/certs.d
-RUN mkdir -p /usr/lib/systemd/system
+RUN OTEL_VERSION="0.115.1" && \
+    curl -L https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol_${OTEL_VERSION}_linux_amd64.tar.gz \
+    -o /tmp/otelcol.tar.gz && \
+    tar -xzf /tmp/otelcol.tar.gz -C /usr/local/bin otelcol && \
+    rm /tmp/otelcol.tar.gz && \
+    mkdir -p /etc/otelcol/certs && \
+    mkdir -p /etc/flightctl/certs.d && \
+    mkdir -p /usr/lib/systemd/system
 
-COPY configs/otelcol-config.yaml /etc/otelcol/config.yaml 
-COPY flightctl-cert-config.yaml /etc/flightctl/certs.d/otel.yaml
-COPY configs/otelcol.service /usr/lib/systemd/system/otelcol.service
+COPY containerfiles/configs/otelcol-config.yaml /etc/otelcol/config.yaml 
+COPY containerfiles/configs/flightctl-cert-config.yaml /etc/flightctl/certs.d/otel.yaml
+COPY containerfiles/configs/otelcol.service /usr/lib/systemd/system/otelcol.service
 
 RUN systemctl enable otelcol.service
 
@@ -199,7 +203,7 @@ RUN mkdir -p /etc/flightctl
 
 LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
 LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, podman-compose, node_exporter, and OpenTelemetry Collector for GPU-accelerated MLOps workloads."
-LABEL org.opencontainers.image.version="v1.0.10"
+LABEL org.opencontainers.image.version="v1.0.11"
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/redhat-et/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"

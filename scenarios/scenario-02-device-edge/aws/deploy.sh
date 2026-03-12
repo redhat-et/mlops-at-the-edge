@@ -94,7 +94,7 @@ echo "Successfully logged into FlightCtl"
 ENROLLMENT_SERVICE_CONFIG=$(flightctl certificate request --signer=enrollment --expiration=365d --output=embedded)
 
 # AMI id for a custom built RHEL image with the Flightctl agent and Nvidia drivers preinstalled
-RHEL_AMI_ID=ami-03f63d54aa5e66764
+RHEL_AMI_ID=ami-08e3b3243b6ac50e2
 # Use g5.xlarge for GPU support (NVIDIA A10G 24GB)
 GPU_INSTANCE_TYPE=g5.xlarge
 
