@@ -791,19 +791,6 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
-      },
-      "id": 7,
-      "panels": [],
-      "title": "ITL (Iteration Latency / Time Per Output Token) over time.",
-      "type": "row"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
         "y": 27
       },
       "id": 6,
