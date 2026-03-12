@@ -1,0 +1,19 @@
+apiVersion: flightctl.io/v1beta1
+kind: Fleet
+metadata:
+  name: mlops
+  labels:
+    project: mlops
+spec:
+  selector:
+    matchLabels:
+      project: mlops
+  template:
+    metadata:
+      labels:
+        fleet: mlops
+    spec:
+      applications:
+        - name: mlops-gpu-stack
+          appType: quadlet
+          image: quay.io/redhat-et/mlops-quadlet:v1.0.0

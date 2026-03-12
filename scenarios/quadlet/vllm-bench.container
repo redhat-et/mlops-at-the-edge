@@ -1,0 +1,15 @@
+[Unit]
+Description=vLLM Benchmark Load Generator
+After=vllm-server.service
+
+[Container]
+Image=quay.io/redhat-et/vllm-server:latest
+Volume=model-storage.volume:/models:ro,z
+Network=mlops.network
+Exec=sh -c "sleep 120 && vllm bench serve --base-url http://vllm-server:8000 --model Llama-3.2-1B-Instruct --tokenizer /models --request-rate 3.0"
+
+[Service]
+Type=oneshot
+
+[Install]
+WantedBy=multi-user.target default.target
