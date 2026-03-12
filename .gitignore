@@ -18,6 +18,11 @@
 *.crt
 !*.example
 
+# FlightCtl enrollment config (contains sensitive certs)
+containerfiles/configs/flightctl-config.yaml
+**/flightctl-config.yaml
+!**/flightctl-config.yaml.template
+
 # Python
 __pycache__/
 *.py[cod]
@@ -47,3 +52,9 @@ Thumbs.db
 # Ignore generated files
 scenarios/scenario-02-device-edge/openshift/fleet/build-image/output/
 scenarios/scenario-02-device-edge/openshift/fleet/create-fleet/cloud-init
+# Claude
+claude.md
+
+# Flightctl
+flightctl-docs
+flightctl-config.yaml
