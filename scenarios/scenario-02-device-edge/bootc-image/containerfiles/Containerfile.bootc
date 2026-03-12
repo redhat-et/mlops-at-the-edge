@@ -171,93 +171,18 @@ RUN NODE_EXPORTER_VERSION="1.8.2" && \
     rm /tmp/node_exporter.tar.gz && \
     useradd -rs /bin/false node_exporter
 
-RUN cat > /etc/systemd/system/node_exporter.service <<'EOF'
-[Unit]
-Description=Node Exporter
-After=network.target
-
-[Service]
-User=node_exporter
-Group=node_exporter
-Type=simple
-ExecStart=/usr/local/bin/node_exporter
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
+COPY configs/node_exporter.service /etc/systemd/system/node_exporter.service 
 RUN systemctl enable node_exporter.service
 
 # OpenTelemetry Collector - collects host metrics, forwards to Prometheus/OTLP
-RUN OTEL_VERSION="0.96.0" && \
-    curl -L https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz \
-    -o /tmp/otelcol.tar.gz && \
-    tar -xzf /tmp/otelcol.tar.gz -C /usr/local/bin otelcol-contrib && \
-    mv /usr/local/bin/otelcol-contrib /usr/local/bin/otelcol && \
-    rm /tmp/otelcol.tar.gz && \
-    mkdir -p /etc/otelcol
+RUN dnf install -y opentelemetry-collector
+RUN mkdir -p /etc/otelcol/certs
+RUN mkdir -p /etc/flightctl/certs.d
+RUN mkdir -p /usr/lib/systemd/system
 
-RUN cat > /etc/otelcol/config.yaml <<'EOF'
-receivers:
-  hostmetrics:
-    collection_interval: 30s
-    scrapers:
-      cpu:
-      disk:
-      memory:
-      network:
-      filesystem:
-      load:
-      process:
-
-  prometheus:
-    config:
-      scrape_configs:
-        - job_name: 'node_exporter'
-          static_configs:
-            - targets: ['localhost:9100']
-
-processors:
-  batch:
-    timeout: 10s
-
-exporters:
-  prometheus:
-    endpoint: "0.0.0.0:8889"
-
-  otlp:
-    endpoint: "localhost:4317"
-    tls:
-      insecure: true
-
-  logging:
-    loglevel: info
-
-service:
-  pipelines:
-    metrics:
-      receivers: [hostmetrics, prometheus]
-      processors: [batch]
-      exporters: [prometheus, logging]
-EOF
-
-RUN cat > /etc/systemd/system/otelcol.service <<'EOF'
-[Unit]
-Description=OpenTelemetry Collector
-After=network-online.target flightctl-agent.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-ExecStartPre=/bin/sleep 5
-ExecStart=/usr/local/bin/otelcol --config=/etc/otelcol/config.yaml
-Restart=on-failure
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-EOF
+COPY configs/otelcol-config.yaml /etc/otelcol/config.yaml 
+COPY flightctl-cert-config.yaml /etc/flightctl/certs.d/otel.yaml
+COPY configs/otelcol.service /usr/lib/systemd/system/otelcol.service
 
 RUN systemctl enable otelcol.service
 

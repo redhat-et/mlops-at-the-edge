@@ -113,6 +113,7 @@ do
 cat > /etc/flightctl/config.yaml <<'CONFIGEOF'
 ${ENROLLMENT_SERVICE_CONFIG}
 CONFIGEOF
+echo "${FLIGHTCTL_INSTANCE_IP} flightctl-telemetry-gateway" | tee -a /etc/hosts
 EOF
 
     aws ec2 run-instances \
