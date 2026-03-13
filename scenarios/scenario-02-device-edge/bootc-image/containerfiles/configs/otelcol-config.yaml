@@ -32,12 +32,9 @@ exporters:
       cert_file: /etc/otelcol/certs/otel.crt
       key_file: /etc/otelcol/certs/otel.key
 
-  logging:
-    loglevel: info
-
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics, prometheus]
       processors: [batch]
-      exporters: [prometheus, logging, otlp]
+      exporters: [prometheus, otlp]

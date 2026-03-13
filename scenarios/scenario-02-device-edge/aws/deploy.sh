@@ -104,9 +104,9 @@ GPU_SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=availability-zone,Value
 echo "Launching fleet devices with AMI: ${RHEL_AMI_ID} and instance type: ${GPU_INSTANCE_TYPE}"
 echo "Using GPU-compatible subnet: ${GPU_SUBNET_ID}"
 
-DEVICES=("flightctl-device-1" "flightctl-device-2")
+FLEET_INSTANCE_NAMES=("flightctl-device-1" "flightctl-device-2")
 
-for device in ${DEVICES[@]}
+for instance_name in ${FLEET_INSTANCE_NAMES[@]}
 do
     cat > /tmp/fleet-user-data.txt <<EOF
 #!/bin/bash
@@ -123,9 +123,9 @@ EOF
         --security-group-ids $FLEET_SG_ID \
         --subnet-id $GPU_SUBNET_ID \
         --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":50,"VolumeType":"gp3"}}]' \
-        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${device}}]" \
+        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${instance_name}}]" \
         --user-data file:///tmp/fleet-user-data.txt
-    echo "Launched ${device}"
+    echo "Launched ${instance_name}"
 done
 
 rm -f /tmp/fleet-user-data.txt
@@ -134,15 +134,15 @@ rm -f /tmp/fleet-user-data.txt
 echo ""
 echo "Waiting for devices to boot and send enrollment requests..."
 echo "This may take 2-3 minutes..."
-EXPECTED_DEVICES=2
+NUM_EXPECTED_DEVICES=${#FLEET_INSTANCE_NAMES[@]}
 RETRY_COUNT=0
 MAX_RETRIES=30  # 30 retries * 10 seconds = 5 minutes max
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     ENROLLMENT_COUNT=$(flightctl get enrollmentrequests -o name 2>/dev/null | wc -l)
-    echo "  - Found ${ENROLLMENT_COUNT}/${EXPECTED_DEVICES} enrollment requests (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})"
+    echo "  - Found ${ENROLLMENT_COUNT}/${NUM_EXPECTED_DEVICES} enrollment requests (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})"
 
-    if [ "$ENROLLMENT_COUNT" -ge "$EXPECTED_DEVICES" ]; then
+    if [ "$ENROLLMENT_COUNT" -ge "$NUM_EXPECTED_DEVICES" ]; then
         echo "✓ All enrollment requests received!"
         break
     fi
@@ -151,19 +151,20 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     RETRY_COUNT=$((RETRY_COUNT+1))
 done
 
-if [ "$ENROLLMENT_COUNT" -lt "$EXPECTED_DEVICES" ]; then
-    echo ":warning: Warning: Only found ${ENROLLMENT_COUNT}/${EXPECTED_DEVICES} enrollment requests after 5 minutes"
+if [ "$ENROLLMENT_COUNT" -lt "$NUM_EXPECTED_DEVICES" ]; then
+    echo ":warning: Warning: Only found ${ENROLLMENT_COUNT}/${NUM_EXPECTED_DEVICES} enrollment requests after 5 minutes"
     echo "Proceeding with available requests..."
 fi
 
 # Approve all enrollment requests with project=mlops label
+MLOPS_LABEL="project=mlops"
 echo ""
 echo "Approving enrollment requests..."
 ENROLLMENT_REQUESTS=$(flightctl get enrollmentrequests -o name)
 for request in $ENROLLMENT_REQUESTS
 do
-    echo "  - Approving ${request} with label project=mlops"
-    flightctl approve -l project=mlops er/$request
+    echo "  - Approving ${request} with label ${MLOPS_LABEL}"
+    flightctl approve -l $MLOPS_LABEL er/$request
 done
 
 # Wait for devices to be enrolled and appear in device list
@@ -174,7 +175,7 @@ sleep 30
 # Create an alias for each device
 echo ""
 echo "Adding alias to devices..."
-DEVICES=$(flightctl get devices -o name)
+DEVICES=$(flightctl get devices -o name -l $MLOPS_LABEL)
 for device in $DEVICES
 do
     DEVICE_SPEC_FILE=$device.yaml
@@ -190,8 +191,11 @@ echo "Applying fleet configuration..."
 flightctl apply -f fleet.yaml
 echo "✓ Fleet configuration applied"
 
-# Wait a moment for fleet to be processed
-sleep 5
+# Wait until the fleet spec has been applied to all devices
+while flightctl get devices -l=$MLOPS_LABEL --summary-only | grep -E 'UPDATED|APPLICATIONS' | grep -vE "\s+$NUM_EXPECTED_DEVICES$"; do
+    echo "Waiting for $NUM_EXPECTED_DEVICES devices to reach goal state..."
+    sleep 5
+done
 
 # Deployment summary and access information
 echo ""

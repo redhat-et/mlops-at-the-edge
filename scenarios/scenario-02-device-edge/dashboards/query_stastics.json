@@ -708,7 +708,7 @@
       },
       {
         "current": { "text": ["All"], "value": ["$__all"] },
-        "definition": "label_values(vllm_request_success_total,model_name)",
+        "definition": "label_values(model_name)",
         "includeAll": true,
         "label": "Model_Name",
         "multi": true,
@@ -716,7 +716,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(vllm_request_success_total,model_name)",
+          "query": "label_values(model_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
