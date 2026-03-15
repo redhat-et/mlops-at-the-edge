@@ -1,5 +1,6 @@
 # OpenWebUI Container - Configured for vLLM Integration
 # Extends official OpenWebUI image with vLLM-specific configuration
+# Built via OpenShift BuildConfig pipeline
 
 FROM ghcr.io/open-webui/open-webui:main
 
