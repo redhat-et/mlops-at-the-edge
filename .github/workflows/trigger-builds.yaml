@@ -34,7 +34,10 @@ jobs:
       - name: Trigger BuildConfig
         run: |
           curl -sk -X POST \
+            -H "Authorization: Bearer ${{ secrets.OPENSHIFT_TOKEN }}" \
             -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: push" \
+            -d '{"ref":"refs/heads/main"}' \
             "${{ secrets.OPENSHIFT_WEBHOOK_MODELCAR }}"
 
   build-vllm-server:
@@ -45,7 +48,10 @@ jobs:
       - name: Trigger BuildConfig
         run: |
           curl -sk -X POST \
+            -H "Authorization: Bearer ${{ secrets.OPENSHIFT_TOKEN }}" \
             -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: push" \
+            -d '{"ref":"refs/heads/main"}' \
             "${{ secrets.OPENSHIFT_WEBHOOK_VLLM }}"
 
   build-openwebui:
@@ -56,5 +62,8 @@ jobs:
       - name: Trigger BuildConfig
         run: |
           curl -sk -X POST \
+            -H "Authorization: Bearer ${{ secrets.OPENSHIFT_TOKEN }}" \
             -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: push" \
+            -d '{"ref":"refs/heads/main"}' \
             "${{ secrets.OPENSHIFT_WEBHOOK_OPENWEBUI }}"

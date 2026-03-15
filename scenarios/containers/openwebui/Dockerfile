@@ -6,7 +6,7 @@ FROM ghcr.io/open-webui/open-webui:main
 
 # Metadata
 LABEL name="openwebui" \
-      version="1.0.0" \
+      version="1.0.1" \
       description="OpenWebUI chat interface configured for vLLM backend" \
       maintainer="Red Hat Emerging Technologies" \
       io.openshift.tags="ai,llm,ui,chat,web"
