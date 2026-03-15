@@ -7,95 +7,57 @@ metadata:
     app.kubernetes.io/part-of: mlops-edge
 spec:
   description: >-
-    Build a container image using buildah and push it to a registry.
-    Supports build secrets (e.g. HF_TOKEN) and registry authentication.
+    Triggers an OpenShift BuildConfig to build a container image and push
+    to a registry. Uses oc start-build with binary input from the workspace.
   params:
-    - name: IMAGE
-      description: Full image reference including tag (e.g. quay.io/redhat-et/modelcar:abc123)
+    - name: BUILD_CONFIG
+      description: Name of the BuildConfig to trigger
       type: string
     - name: CONTEXT
       description: Build context directory relative to workspace root
       type: string
       default: "."
-    - name: CONTAINERFILE
-      description: Path to Dockerfile/Containerfile relative to workspace root
+    - name: IMAGE_TAG
+      description: Tag to apply to the output image
       type: string
-      default: "Dockerfile"
-    - name: BUILD_SECRET
+      default: "latest"
+    - name: IMAGE_BASE
       description: >-
-        Name of a build secret to pass via --secret. The secret must exist
-        as a key in the build-secrets workspace. Leave empty for no secret.
+        Base image reference without tag (e.g. quay.io/redhat-et/openwebui).
+        Used to patch the BuildConfig output before building.
       type: string
-      default: ""
-    - name: BUILD_ARGS
-      description: Extra buildah bud arguments (space-separated)
-      type: string
-      default: ""
   workspaces:
     - name: source
       description: Workspace containing the source code
-    - name: registry-credentials
-      description: Workspace containing .dockerconfigjson for registry auth
-    - name: build-secrets
-      description: >-
-        Optional workspace backed by a Secret containing build secrets
-        (e.g. HF_TOKEN). Each key becomes a file at the workspace path.
-      optional: true
   steps:
-    - name: build-and-push
-      image: registry.redhat.io/rhel8/buildah:latest
-      securityContext:
-        capabilities:
-          add: ["SETFCAP"]
-      workingDir: $(workspaces.source.path)
+    - name: build
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      env:
+        - name: HOME
+          value: /tmp/oc-home
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
 
-        # Set up registry auth from workspace
-        AUTHFILE="$(workspaces.registry-credentials.path)/.dockerconfigjson"
-        if [ -f "$AUTHFILE" ]; then
-          export REGISTRY_AUTH_FILE="$AUTHFILE"
-          echo "Using registry credentials from workspace"
-        fi
+        mkdir -p "$HOME"
 
-        # Build the secret flag if a build secret is specified
-        SECRET_FLAG=""
-        BUILD_SECRET="$(params.BUILD_SECRET)"
-        if [ -n "$BUILD_SECRET" ]; then
-          SECRET_FILE="$(workspaces.build-secrets.path)/$BUILD_SECRET"
-          if [ -f "$SECRET_FILE" ]; then
-            SECRET_FLAG="--secret id=$BUILD_SECRET,src=$SECRET_FILE"
-            echo "Build secret '$BUILD_SECRET' will be mounted"
-          else
-            echo "WARNING: Build secret '$BUILD_SECRET' not found at $SECRET_FILE"
-            echo "Available files in build-secrets workspace:"
-            ls -la "$(workspaces.build-secrets.path)/" 2>/dev/null || echo "  (workspace not bound)"
-          fi
-        fi
+        BC="$(params.BUILD_CONFIG)"
+        TAG="$(params.IMAGE_TAG)"
+        IMAGE_BASE="$(params.IMAGE_BASE)"
+        CONTEXT="$(workspaces.source.path)/$(params.CONTEXT)"
 
-        echo "Building image: $(params.IMAGE)"
-        echo "  Context: $(params.CONTEXT)"
-        echo "  Containerfile: $(params.CONTAINERFILE)"
+        echo "Build config: $BC"
+        echo "Context dir:  $CONTEXT"
+        echo "Output image: ${IMAGE_BASE}:${TAG}"
 
-        buildah bud \
-          --storage-driver=vfs \
-          --format=oci \
-          -f "$(params.CONTAINERFILE)" \
-          -t "$(params.IMAGE)" \
-          ${SECRET_FLAG} \
-          $(params.BUILD_ARGS) \
-          "$(params.CONTEXT)"
+        # Patch the BuildConfig output tag
+        oc patch bc "$BC" --type=json \
+          -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE_BASE}:${TAG}\"}]"
 
-        echo "Pushing image: $(params.IMAGE)"
-        buildah push \
-          --storage-driver=vfs \
-          "$(params.IMAGE)"
+        # Start the build with binary input from the context directory
+        oc start-build "$BC" \
+          --from-dir="$CONTEXT" \
+          --wait \
+          --follow
 
-        echo "Successfully built and pushed $(params.IMAGE)"
-      volumeMounts:
-        - name: varlibcontainers
-          mountPath: /var/lib/containers
-  volumes:
-    - name: varlibcontainers
-      emptyDir: {}
+        echo "Successfully built and pushed ${IMAGE_BASE}:${TAG}"
