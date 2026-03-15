@@ -1,0 +1,59 @@
+name: Trigger OpenShift Container Builds
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scenarios/containers/**'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      modelcar: ${{ steps.filter.outputs.modelcar }}
+      vllm-server: ${{ steps.filter.outputs.vllm-server }}
+      openwebui: ${{ steps.filter.outputs.openwebui }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            modelcar:
+              - 'scenarios/containers/modelcar/**'
+            vllm-server:
+              - 'scenarios/containers/vllm-server/**'
+            openwebui:
+              - 'scenarios/containers/openwebui/**'
+
+  build-modelcar:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.modelcar == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger BuildConfig
+        run: |
+          curl -sk -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.OPENSHIFT_WEBHOOK_MODELCAR }}"
+
+  build-vllm-server:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.vllm-server == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger BuildConfig
+        run: |
+          curl -sk -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.OPENSHIFT_WEBHOOK_VLLM }}"
+
+  build-openwebui:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.openwebui == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger BuildConfig
+        run: |
+          curl -sk -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.OPENSHIFT_WEBHOOK_OPENWEBUI }}"
