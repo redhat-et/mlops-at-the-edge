@@ -1,0 +1,11 @@
+[Unit]
+Description=Run vLLM Benchmark every 6 minutes
+After=vllm-server.service
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=6min
+Unit=vllm-bench.service
+
+[Install]
+WantedBy=timers.target
