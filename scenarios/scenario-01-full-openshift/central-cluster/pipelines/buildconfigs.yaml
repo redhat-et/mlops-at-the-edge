@@ -1,0 +1,97 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: build-modelcar
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/redhat-et/mlops-at-the-edge.git
+      ref: main
+    contextDir: scenarios/containers/modelcar
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: HF_TOKEN
+  output:
+    to:
+      kind: DockerImage
+      name: quay.io/redhat-et/modelcar-llama-3.2-1b:latest
+    pushSecret:
+      name: registry-credentials
+  triggers:
+    - type: GitHub
+      github:
+        secretReference:
+          name: github-webhook-secret
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: build-vllm-server
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/redhat-et/mlops-at-the-edge.git
+      ref: main
+    contextDir: scenarios/containers/vllm-server
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+      pullSecret:
+        name: redhat-registry
+  output:
+    to:
+      kind: DockerImage
+      name: quay.io/redhat-et/vllm-server:latest
+    pushSecret:
+      name: registry-credentials
+  triggers:
+    - type: GitHub
+      github:
+        secretReference:
+          name: github-webhook-secret
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: build-openwebui
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/redhat-et/mlops-at-the-edge.git
+      ref: main
+    contextDir: scenarios/containers/openwebui
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: DockerImage
+      name: quay.io/redhat-et/openwebui:latest
+    pushSecret:
+      name: registry-credentials
+  triggers:
+    - type: GitHub
+      github:
+        secretReference:
+          name: github-webhook-secret
