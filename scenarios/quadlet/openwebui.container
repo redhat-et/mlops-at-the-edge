@@ -1,0 +1,22 @@
+[Unit]
+Description=OpenWebUI Chat Frontend
+After=network-online.target vllm-server.service
+Requires=vllm-server.service
+
+[Container]
+Image=quay.io/redhat-et/openwebui:latest
+Volume=openwebui-data.volume:/app/backend/data:Z
+Network=host
+Environment=OPENAI_API_BASE_URL=http://localhost:8000/v1
+HealthCmd=curl -f http://localhost:8080/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=20s
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target
