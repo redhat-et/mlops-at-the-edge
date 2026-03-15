@@ -1,0 +1,72 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: github-push-binding
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  params:
+    - name: git-revision
+      value: $(body.after)
+    - name: git-url
+      value: $(body.repository.clone_url)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: build-mlops-containers-template
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  params:
+    - name: git-revision
+      description: The git commit SHA
+    - name: git-url
+      description: The git repository URL
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: build-mlops-containers-
+        namespace: mlops-pipelines
+        labels:
+          app.kubernetes.io/part-of: mlops-edge
+          tekton.dev/pipeline: build-mlops-containers
+      spec:
+        pipelineRef:
+          name: build-mlops-containers
+        params:
+          - name: git-url
+            value: $(tt.params.git-url)
+          - name: git-revision
+            value: $(tt.params.git-revision)
+          - name: image-tag
+            value: $(tt.params.git-revision)
+        workspaces:
+          - name: shared-workspace
+            persistentVolumeClaim:
+              claimName: pipeline-workspace
+          - name: registry-credentials
+            secret:
+              secretName: registry-credentials
+          - name: build-secrets
+            secret:
+              secretName: hf-token
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: el-container-build
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: github-push
+      bindings:
+        - ref: github-push-binding
+      template:
+        ref: build-mlops-containers-template

@@ -1,0 +1,112 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-mlops-containers
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+    app.kubernetes.io/component: pipelines
+spec:
+  description: >-
+    Builds all three MLOps container images (modelcar, vllm-server, openwebui)
+    and pushes them to Quay.io. Triggered by git push or manual start.
+  params:
+    - name: git-url
+      description: Git repository URL
+      type: string
+      default: "https://github.com/redhat-et/mlops-at-the-edge.git"
+    - name: git-revision
+      description: Git branch or commit SHA to build from
+      type: string
+      default: "main"
+    - name: quay-namespace
+      description: Quay.io namespace/org for image push
+      type: string
+      default: "redhat-et"
+    - name: image-tag
+      description: Tag for built images (e.g. commit SHA, v1.0.0)
+      type: string
+      default: "latest"
+  workspaces:
+    - name: shared-workspace
+      description: PVC for cloned source code, shared across tasks
+    - name: registry-credentials
+      description: Secret with .dockerconfigjson for Quay.io and registry.redhat.io
+    - name: build-secrets
+      description: Secret containing build secrets (e.g. HF_TOKEN key)
+      optional: true
+  tasks:
+    # Step 1: Clone the git repository
+    - name: git-clone
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+        - name: deleteExisting
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+    # Step 2: Build all three images in parallel
+    - name: build-modelcar
+      runAfter:
+        - git-clone
+      taskRef:
+        name: build-and-push-image
+      params:
+        - name: IMAGE
+          value: "quay.io/$(params.quay-namespace)/modelcar-llama-3.2-1b:$(params.image-tag)"
+        - name: CONTEXT
+          value: "scenarios/containers/modelcar"
+        - name: CONTAINERFILE
+          value: "scenarios/containers/modelcar/Containerfile"
+        - name: BUILD_SECRET
+          value: "HF_TOKEN"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: registry-credentials
+          workspace: registry-credentials
+        - name: build-secrets
+          workspace: build-secrets
+
+    - name: build-vllm-server
+      runAfter:
+        - git-clone
+      taskRef:
+        name: build-and-push-image
+      params:
+        - name: IMAGE
+          value: "quay.io/$(params.quay-namespace)/vllm-server:$(params.image-tag)"
+        - name: CONTEXT
+          value: "scenarios/containers/vllm-server"
+        - name: CONTAINERFILE
+          value: "scenarios/containers/vllm-server/Dockerfile"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: registry-credentials
+          workspace: registry-credentials
+
+    - name: build-openwebui
+      runAfter:
+        - git-clone
+      taskRef:
+        name: build-and-push-image
+      params:
+        - name: IMAGE
+          value: "quay.io/$(params.quay-namespace)/openwebui:$(params.image-tag)"
+        - name: CONTEXT
+          value: "scenarios/containers/openwebui"
+        - name: CONTAINERFILE
+          value: "scenarios/containers/openwebui/Dockerfile"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: registry-credentials
+          workspace: registry-credentials
