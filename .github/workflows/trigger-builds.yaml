@@ -1,10 +1,14 @@
-name: Trigger OpenShift Container Builds
+name: Build Containers and Deploy to Fleet
 
 on:
   push:
     branches: [main]
     paths:
       - 'scenarios/containers/**'
+
+env:
+  QUAY_NAMESPACE: redhat-et
+  OPENSHIFT_SERVER: https://api.ocp-beta-test.nerc.mghpcc.org:6443
 
 jobs:
   detect-changes:
@@ -13,6 +17,7 @@ jobs:
       modelcar: ${{ steps.filter.outputs.modelcar }}
       vllm-server: ${{ steps.filter.outputs.vllm-server }}
       openwebui: ${{ steps.filter.outputs.openwebui }}
+      sha_short: ${{ steps.sha.outputs.sha_short }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -25,45 +30,131 @@ jobs:
               - 'scenarios/containers/vllm-server/**'
             openwebui:
               - 'scenarios/containers/openwebui/**'
+      - name: Get short SHA
+        id: sha
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+  # --- Pipeline 1: Build container images with SHA tags ---
 
   build-modelcar:
     needs: detect-changes
     if: needs.detect-changes.outputs.modelcar == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger BuildConfig
+      - name: Install oc CLI
         run: |
-          curl -sk -X POST \
-            -H "Authorization: Bearer ${{ secrets.OPENSHIFT_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -H "X-GitHub-Event: push" \
-            -d '{"ref":"refs/heads/main"}' \
-            "${{ secrets.OPENSHIFT_WEBHOOK_MODELCAR }}"
+          curl -sLo oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar xzf oc.tar.gz oc
+          sudo mv oc /usr/local/bin/
+      - name: Build with SHA tag
+        run: |
+          oc login --token="${{ secrets.OPENSHIFT_TOKEN }}" --server="${{ env.OPENSHIFT_SERVER }}" --insecure-skip-tls-verify
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          IMAGE="quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:${SHA}"
+          oc patch bc build-modelcar -n mlops-pipelines --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE}\"}]"
+          oc start-build build-modelcar -n mlops-pipelines --wait --follow
 
   build-vllm-server:
     needs: detect-changes
     if: needs.detect-changes.outputs.vllm-server == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger BuildConfig
+      - name: Install oc CLI
         run: |
-          curl -sk -X POST \
-            -H "Authorization: Bearer ${{ secrets.OPENSHIFT_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -H "X-GitHub-Event: push" \
-            -d '{"ref":"refs/heads/main"}' \
-            "${{ secrets.OPENSHIFT_WEBHOOK_VLLM }}"
+          curl -sLo oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar xzf oc.tar.gz oc
+          sudo mv oc /usr/local/bin/
+      - name: Build with SHA tag
+        run: |
+          oc login --token="${{ secrets.OPENSHIFT_TOKEN }}" --server="${{ env.OPENSHIFT_SERVER }}" --insecure-skip-tls-verify
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          IMAGE="quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:${SHA}"
+          oc patch bc build-vllm-server -n mlops-pipelines --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE}\"}]"
+          oc start-build build-vllm-server -n mlops-pipelines --wait --follow
 
   build-openwebui:
     needs: detect-changes
     if: needs.detect-changes.outputs.openwebui == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger BuildConfig
+      - name: Install oc CLI
         run: |
-          curl -sk -X POST \
-            -H "Authorization: Bearer ${{ secrets.OPENSHIFT_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -H "X-GitHub-Event: push" \
-            -d '{"ref":"refs/heads/main"}' \
-            "${{ secrets.OPENSHIFT_WEBHOOK_OPENWEBUI }}"
+          curl -sLo oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar xzf oc.tar.gz oc
+          sudo mv oc /usr/local/bin/
+      - name: Build with SHA tag
+        run: |
+          oc login --token="${{ secrets.OPENSHIFT_TOKEN }}" --server="${{ env.OPENSHIFT_SERVER }}" --insecure-skip-tls-verify
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          IMAGE="quay.io/${{ env.QUAY_NAMESPACE }}/openwebui:${SHA}"
+          oc patch bc build-openwebui -n mlops-pipelines --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE}\"}]"
+          oc start-build build-openwebui -n mlops-pipelines --wait --follow
+
+  # --- Pipeline 2: Update quadlets, build OCI, update fleet ---
+
+  deploy-to-fleet:
+    needs: [detect-changes, build-modelcar, build-vllm-server, build-openwebui]
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      (needs.build-modelcar.result == 'success' || needs.build-modelcar.result == 'skipped') &&
+      (needs.build-vllm-server.result == 'success' || needs.build-vllm-server.result == 'skipped') &&
+      (needs.build-openwebui.result == 'success' || needs.build-openwebui.result == 'skipped') &&
+      (needs.build-modelcar.result == 'success' || needs.build-vllm-server.result == 'success' || needs.build-openwebui.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update quadlet image tags
+        run: |
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+
+          if [ "${{ needs.build-modelcar.result }}" = "success" ]; then
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:${SHA}|" scenarios/quadlet/model-car.container
+            echo "Updated modelcar to :${SHA}"
+          fi
+
+          if [ "${{ needs.build-vllm-server.result }}" = "success" ]; then
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:${SHA}|" scenarios/quadlet/vllm-server.container
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:${SHA}|" scenarios/quadlet/vllm-bench.container
+            echo "Updated vllm-server to :${SHA}"
+          fi
+
+          if [ "${{ needs.build-openwebui.result }}" = "success" ]; then
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/openwebui:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/openwebui:${SHA}|" scenarios/quadlet/openwebui.container
+            echo "Updated openwebui to :${SHA}"
+          fi
+
+      - name: Build quadlet OCI image
+        run: |
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          podman build \
+            -f scenarios/quadlet/containerfiles/Containerfile.quadlet \
+            -t quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${SHA} \
+            .
+
+      - name: Push quadlet OCI image to Quay
+        run: |
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          echo "${{ secrets.QUAY_PASSWORD }}" | podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
+          podman push quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${SHA}
+
+      - name: Update fleet.yaml
+        run: |
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${SHA}|" scenarios/scenario-02-device-edge/aws/fleet.yaml
+          echo "Updated fleet.yaml to mlops-quadlet:${SHA}"
+
+      - name: Commit and push updates
+        run: |
+          SHA="${{ needs.detect-changes.outputs.sha_short }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scenarios/quadlet/ scenarios/scenario-02-device-edge/aws/fleet.yaml
+          git commit -m "Update quadlet and fleet image tags to ${SHA}" || echo "No changes to commit"
+          git push
