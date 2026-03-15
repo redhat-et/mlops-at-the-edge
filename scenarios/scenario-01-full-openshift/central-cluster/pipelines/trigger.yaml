@@ -37,6 +37,7 @@ spec:
       spec:
         pipelineRef:
           name: build-mlops-containers
+        serviceAccountName: pipeline
         params:
           - name: git-url
             value: $(tt.params.git-url)
@@ -48,12 +49,6 @@ spec:
           - name: shared-workspace
             persistentVolumeClaim:
               claimName: pipeline-workspace
-          - name: registry-credentials
-            secret:
-              secretName: registry-credentials
-          - name: build-secrets
-            secret:
-              secretName: hf-token
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
@@ -66,6 +61,16 @@ spec:
   serviceAccountName: pipeline
   triggers:
     - name: github-push
+      interceptors:
+        - ref:
+            name: "cel"
+          params:
+            - name: "filter"
+              value: >-
+                body.ref == 'refs/heads/main' &&
+                body.commits.exists(c, c.added.exists(f, f.startsWith('scenarios/containers/')) ||
+                                       c.modified.exists(f, f.startsWith('scenarios/containers/')) ||
+                                       c.removed.exists(f, f.startsWith('scenarios/containers/')))
       bindings:
         - ref: github-push-binding
       template:

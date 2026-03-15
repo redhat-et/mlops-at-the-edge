@@ -7,7 +7,11 @@ metadata:
     app.kubernetes.io/part-of: mlops-edge
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: https://github.com/redhat-et/mlops-at-the-edge.git
+      ref: main
+    contextDir: scenarios/containers/modelcar
   strategy:
     type: Docker
     dockerStrategy:
@@ -24,6 +28,11 @@ spec:
       name: quay.io/redhat-et/modelcar-llama-3.2-1b:latest
     pushSecret:
       name: registry-credentials
+  triggers:
+    - type: GitHub
+      github:
+        secretReference:
+          name: github-webhook-secret
 ---
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
@@ -34,7 +43,11 @@ metadata:
     app.kubernetes.io/part-of: mlops-edge
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: https://github.com/redhat-et/mlops-at-the-edge.git
+      ref: main
+    contextDir: scenarios/containers/vllm-server
   strategy:
     type: Docker
     dockerStrategy:
@@ -47,6 +60,11 @@ spec:
       name: quay.io/redhat-et/vllm-server:latest
     pushSecret:
       name: registry-credentials
+  triggers:
+    - type: GitHub
+      github:
+        secretReference:
+          name: github-webhook-secret
 ---
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
@@ -57,7 +75,11 @@ metadata:
     app.kubernetes.io/part-of: mlops-edge
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: https://github.com/redhat-et/mlops-at-the-edge.git
+      ref: main
+    contextDir: scenarios/containers/openwebui
   strategy:
     type: Docker
     dockerStrategy:
@@ -68,3 +90,8 @@ spec:
       name: quay.io/redhat-et/openwebui:latest
     pushSecret:
       name: registry-credentials
+  triggers:
+    - type: GitHub
+      github:
+        secretReference:
+          name: github-webhook-secret
