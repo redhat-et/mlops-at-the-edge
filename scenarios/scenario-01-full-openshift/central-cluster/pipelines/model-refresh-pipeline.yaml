@@ -35,11 +35,6 @@ spec:
   workspaces:
     - name: shared-workspace
       description: PVC for cloned source code
-    - name: registry-credentials
-      description: Secret with .dockerconfigjson for Quay.io
-    - name: build-secrets
-      description: Secret containing build secrets (e.g. HF_TOKEN key)
-      optional: true
   tasks:
     # Step 1: Clone the repository
     - name: git-clone
@@ -75,21 +70,17 @@ spec:
       taskRef:
         name: build-and-push-image
       params:
-        - name: IMAGE
-          value: "quay.io/$(params.quay-namespace)/modelcar-llama-3.2-1b:$(params.model-version)"
+        - name: BUILD_CONFIG
+          value: build-modelcar
         - name: CONTEXT
           value: "scenarios/containers/modelcar"
-        - name: CONTAINERFILE
-          value: "scenarios/containers/modelcar/Containerfile"
-        - name: BUILD_SECRET
-          value: "HF_TOKEN"
+        - name: IMAGE_TAG
+          value: $(params.model-version)
+        - name: IMAGE_BASE
+          value: "quay.io/$(params.quay-namespace)/modelcar-llama-3.2-1b"
       workspaces:
         - name: source
           workspace: shared-workspace
-        - name: registry-credentials
-          workspace: registry-credentials
-        - name: build-secrets
-          workspace: build-secrets
 
     # Step 4: Update quadlets and fleet via GitHub Actions
     - name: trigger-fleet-update

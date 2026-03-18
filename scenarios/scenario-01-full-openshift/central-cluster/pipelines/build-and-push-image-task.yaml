@@ -54,9 +54,8 @@ spec:
         oc patch bc "$BC" --type=json \
           -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE_BASE}:${TAG}\"}]"
 
-        # Start the build with binary input from the context directory
+        # Start the build (uses BuildConfig's Git source)
         oc start-build "$BC" \
-          --from-dir="$CONTEXT" \
           --wait \
           --follow
 
