@@ -175,20 +175,20 @@ COPY containerfiles/configs/node_exporter.service /etc/systemd/system/node_expor
 RUN systemctl enable node_exporter.service
 
 # OpenTelemetry Collector - collects host metrics, forwards to Prometheus/OTLP
-RUN OTEL_VERSION="0.115.1" && \
-    curl -L https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol_${OTEL_VERSION}_linux_amd64.tar.gz \
-    -o /tmp/otelcol.tar.gz && \
-    tar -xzf /tmp/otelcol.tar.gz -C /usr/local/bin otelcol && \
-    rm /tmp/otelcol.tar.gz && \
-    mkdir -p /etc/otelcol/certs && \
+RUN dnf copr enable -y frzifus/redhat-opentelemetry-collector-main epel-9-x86_64 && \
+    dnf install -y opentelemetry-collector
+
+RUN mkdir -p /etc/otelcol/certs && \
     mkdir -p /etc/flightctl/certs.d && \
-    mkdir -p /usr/lib/systemd/system
+    mkdir -p /usr/lib/systemd/system && \
+    mkdir -p /etc/systemd/system/opentelemetry-collector.service.d
 
-COPY containerfiles/configs/otelcol-config.yaml /etc/otelcol/config.yaml 
+COPY containerfiles/configs/otelcol-config.yaml /etc/opentelemetry-collector/configs/base-config.yaml 
 COPY containerfiles/configs/flightctl-cert-config.yaml /etc/flightctl/certs.d/otel.yaml
-COPY containerfiles/configs/otelcol.service /usr/lib/systemd/system/otelcol.service
+COPY containerfiles/configs/01-configure-otel-certs.conf /etc/systemd/system/opentelemetry-collector.service.d/01-configure-certs.conf
+COPY containerfiles/configs/otel-reload-lifecyclehook.yaml /usr/lib/flightctl/hooks.d/afterupdating/otel-reload.yaml
 
-RUN systemctl enable otelcol.service
+RUN systemctl enable opentelemetry-collector
 
 # =============================================================================
 # SECTION 6: Pre-create Directories
