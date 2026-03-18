@@ -4,7 +4,7 @@ After=network-online.target vllm-server.service
 Requires=vllm-server.service
 
 [Container]
-Image=quay.io/redhat-et/openwebui:ce6a54f
+Image=quay.io/redhat-et/openwebui:v1.0.202603181222
 Volume=openwebui-data.volume:/app/backend/data:Z
 Network=host
 Environment=OPENAI_API_BASE_URL=http://localhost:8000/v1
