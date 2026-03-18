@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-kfp
+  labels:
+    opendatahub.io/dashboard: "true"
+---
+apiVersion: datasciencepipelinesapplications.opendatahub.io/v1
+kind: DataSciencePipelinesApplication
+metadata:
+  name: dspa
+  namespace: mlops-kfp
+spec:
+  apiServer:
+    deploy: true
+  database:
+    mariaDB:
+      deploy: true
+      pipelineDBName: mlops_pipelines
+  objectStorage:
+    minio:
+      deploy: true
+      image: quay.io/opendatahub/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
