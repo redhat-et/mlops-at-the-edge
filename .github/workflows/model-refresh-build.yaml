@@ -1,0 +1,78 @@
+name: Model Refresh Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version tag (e.g. v1.0.20260318)"
+        required: true
+        type: string
+      trigger:
+        description: "What triggered this build (audit trail)"
+        required: false
+        default: "kfp-inner-loop"
+        type: string
+
+env:
+  QUAY_NAMESPACE: redhat-et
+  OPENSHIFT_SERVER: https://api.ocp-beta-test.nerc.mghpcc.org:6443
+
+jobs:
+  model-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install oc CLI
+        run: |
+          curl -sLo oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar xzf oc.tar.gz oc
+          sudo mv oc /usr/local/bin/
+
+      - name: Build modelcar with version tag
+        run: |
+          oc login --token="${{ secrets.OPENSHIFT_TOKEN }}" --server="${{ env.OPENSHIFT_SERVER }}" --insecure-skip-tls-verify
+          VERSION="${{ inputs.model_version }}"
+          IMAGE="quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:${VERSION}"
+          echo "Building modelcar image: ${IMAGE}"
+          echo "Trigger: ${{ inputs.trigger }}"
+          oc patch bc build-modelcar -n mlops-pipelines --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE}\"}]"
+          oc start-build build-modelcar -n mlops-pipelines --wait --follow
+
+      - name: Update quadlet image tags
+        run: |
+          VERSION="${{ inputs.model_version }}"
+          sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:${VERSION}|" scenarios/quadlet/model-car.container
+          echo "Updated modelcar quadlet to :${VERSION}"
+
+      - name: Build quadlet OCI image
+        run: |
+          VERSION="${{ inputs.model_version }}"
+          podman build \
+            -f scenarios/quadlet/containerfiles/Containerfile.quadlet \
+            -t quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${VERSION} \
+            .
+
+      - name: Push quadlet OCI image to Quay
+        run: |
+          VERSION="${{ inputs.model_version }}"
+          echo "${{ secrets.QUAY_PASSWORD }}" | podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
+          podman push quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${VERSION}
+
+      - name: Update fleet.yaml
+        run: |
+          VERSION="${{ inputs.model_version }}"
+          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${VERSION}|" scenarios/scenario-02-device-edge/aws/fleet.yaml
+          echo "Updated fleet.yaml to mlops-quadlet:${VERSION}"
+
+      - name: Commit and push updates
+        run: |
+          VERSION="${{ inputs.model_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scenarios/quadlet/model-car.container scenarios/scenario-02-device-edge/aws/fleet.yaml
+          git commit -m "Model refresh: update modelcar to ${VERSION}" || echo "No changes to commit"
+          git push
