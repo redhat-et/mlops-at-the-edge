@@ -3,7 +3,7 @@ Description=Model Car Init Container
 Before=vllm-server.service
 
 [Container]
-Image=quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.202603181133
+Image=quay.io/redhat-et/modelcar-llama-3.2-1b:v1.0.202603181157
 Volume=model-storage.volume:/target:Z
 PodmanArgs=--user=0
 Exec=sh -c "cp -r /models/* /target/"
