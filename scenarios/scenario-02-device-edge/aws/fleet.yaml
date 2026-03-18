@@ -14,4 +14,4 @@ spec:
       applications:
         - name: mlops-gpu-stack
           appType: quadlet
-          image: quay.io/redhat-et/mlops-quadlet:v1.0.20260318
+          image: quay.io/redhat-et/mlops-quadlet:v1.0.202603181133
