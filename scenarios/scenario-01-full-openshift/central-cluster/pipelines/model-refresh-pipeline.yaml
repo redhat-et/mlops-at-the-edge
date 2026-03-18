@@ -91,16 +91,16 @@ spec:
         - name: build-secrets
           workspace: build-secrets
 
-    # Step 4: Log completion (placeholder for Fleet manifest update)
-    - name: notify-completion
+    # Step 4: Update quadlets and fleet via GitHub Actions
+    - name: trigger-fleet-update
       runAfter:
         - build-modelcar
       taskRef:
-        name: log-alert-context
+        name: trigger-fleet-update
       params:
-        - name: ALERT_NAME
-          value: "completed"
-        - name: MODEL_VERSION
+        - name: MODELCAR_TAG
+          value: $(params.model-version)
+        - name: QUADLET_TAG
           value: $(params.model-version)
 ---
 apiVersion: tekton.dev/v1

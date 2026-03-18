@@ -8,6 +8,7 @@ resources:
   # Pipeline resources
   - pipeline-workspace-pvc.yaml
   - build-and-push-image-task.yaml
+  - trigger-fleet-update-task.yaml
   - build-mlops-containers.yaml
   - trigger.yaml
   # Stretch goal - alert-triggered model refresh

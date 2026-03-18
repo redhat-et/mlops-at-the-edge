@@ -1,0 +1,115 @@
+name: Update Fleet
+
+on:
+  # Called by other workflows (model-refresh-build, etc.)
+  workflow_call:
+    inputs:
+      modelcar_tag:
+        description: "Tag for modelcar image (empty = no change)"
+        required: false
+        type: string
+        default: ""
+      vllm_server_tag:
+        description: "Tag for vllm-server image (empty = no change)"
+        required: false
+        type: string
+        default: ""
+      openwebui_tag:
+        description: "Tag for openwebui image (empty = no change)"
+        required: false
+        type: string
+        default: ""
+      quadlet_tag:
+        description: "Tag for the quadlet OCI image"
+        required: true
+        type: string
+    secrets:
+      QUAY_USERNAME:
+        required: true
+      QUAY_PASSWORD:
+        required: true
+
+  # Called externally (Tekton, manual)
+  workflow_dispatch:
+    inputs:
+      modelcar_tag:
+        description: "Tag for modelcar image (empty = no change)"
+        required: false
+        type: string
+        default: ""
+      vllm_server_tag:
+        description: "Tag for vllm-server image (empty = no change)"
+        required: false
+        type: string
+        default: ""
+      openwebui_tag:
+        description: "Tag for openwebui image (empty = no change)"
+        required: false
+        type: string
+        default: ""
+      quadlet_tag:
+        description: "Tag for the quadlet OCI image"
+        required: true
+        type: string
+
+env:
+  QUAY_NAMESPACE: redhat-et
+
+jobs:
+  update-fleet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update quadlet image tags
+        run: |
+          MODELCAR="${{ inputs.modelcar_tag }}"
+          VLLM="${{ inputs.vllm_server_tag }}"
+          WEBUI="${{ inputs.openwebui_tag }}"
+
+          if [ -n "${MODELCAR}" ]; then
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:${MODELCAR}|" scenarios/quadlet/model-car.container
+            echo "Updated modelcar to :${MODELCAR}"
+          fi
+
+          if [ -n "${VLLM}" ]; then
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:${VLLM}|" scenarios/quadlet/vllm-server.container
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/vllm-server:${VLLM}|" scenarios/quadlet/vllm-bench.container
+            echo "Updated vllm-server to :${VLLM}"
+          fi
+
+          if [ -n "${WEBUI}" ]; then
+            sed -i "s|Image=quay.io/${{ env.QUAY_NAMESPACE }}/openwebui:.*|Image=quay.io/${{ env.QUAY_NAMESPACE }}/openwebui:${WEBUI}|" scenarios/quadlet/openwebui.container
+            echo "Updated openwebui to :${WEBUI}"
+          fi
+
+      - name: Build quadlet OCI image
+        run: |
+          TAG="${{ inputs.quadlet_tag }}"
+          podman build \
+            -f scenarios/quadlet/containerfiles/Containerfile.quadlet \
+            -t quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${TAG} \
+            .
+
+      - name: Push quadlet OCI image to Quay
+        run: |
+          TAG="${{ inputs.quadlet_tag }}"
+          echo "${{ secrets.QUAY_PASSWORD }}" | podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
+          podman push quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${TAG}
+
+      - name: Update fleet.yaml
+        run: |
+          TAG="${{ inputs.quadlet_tag }}"
+          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${TAG}|" scenarios/scenario-02-device-edge/aws/fleet.yaml
+          echo "Updated fleet.yaml to mlops-quadlet:${TAG}"
+
+      - name: Commit and push updates
+        run: |
+          TAG="${{ inputs.quadlet_tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scenarios/quadlet/ scenarios/scenario-02-device-edge/aws/fleet.yaml
+          git diff --cached --quiet && echo "No changes to commit" || \
+            (git commit -m "Update quadlet and fleet to ${TAG}" && git push)

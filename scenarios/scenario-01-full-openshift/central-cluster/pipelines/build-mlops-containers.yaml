@@ -100,3 +100,21 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
+
+    # Step 3: Update quadlets and fleet via GitHub Actions
+    - name: trigger-fleet-update
+      runAfter:
+        - build-modelcar
+        - build-vllm-server
+        - build-openwebui
+      taskRef:
+        name: trigger-fleet-update
+      params:
+        - name: MODELCAR_TAG
+          value: $(params.image-tag)
+        - name: VLLM_SERVER_TAG
+          value: $(params.image-tag)
+        - name: OPENWEBUI_TAG
+          value: $(params.image-tag)
+        - name: QUADLET_TAG
+          value: $(params.image-tag)
