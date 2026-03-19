@@ -1,0 +1,7 @@
+apiVersion: flightctl.io/v1beta1
+kind: Repository
+metadata:
+  name: mlops-at-the-edge
+spec:
+  type: git
+  url: https://github.com/redhat-et/mlops-at-the-edge.git
