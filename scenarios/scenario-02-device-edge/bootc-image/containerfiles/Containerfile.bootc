@@ -189,8 +189,7 @@ RUN systemctl enable node_exporter.service
 
 # OpenTelemetry Collector - collects host metrics, forwards to Prometheus/OTLP
 RUN dnf copr enable -y frzifus/redhat-opentelemetry-collector-main epel-9-x86_64 && \
-    dnf install -y --setopt=tsflags=noscripts opentelemetry-collector && \
-    useradd -rs /bin/false observability
+    dnf install -y --setopt=tsflags=noscripts opentelemetry-collector 
 
 RUN mkdir -p /etc/otelcol/certs && \
     mkdir -p /etc/flightctl/certs.d && \
