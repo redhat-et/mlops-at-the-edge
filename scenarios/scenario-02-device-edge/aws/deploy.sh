@@ -136,7 +136,7 @@ echo "Waiting for devices to boot and send enrollment requests..."
 echo "This may take 2-3 minutes..."
 NUM_EXPECTED_DEVICES=${#FLEET_INSTANCE_NAMES[@]}
 RETRY_COUNT=0
-MAX_RETRIES=30  # 30 retries * 10 seconds = 5 minutes max
+MAX_RETRIES=50
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     ENROLLMENT_COUNT=$(flightctl get enrollmentrequests -o name 2>/dev/null | wc -l)
@@ -188,6 +188,7 @@ done
 # Apply fleet configuration to enrolled devices
 echo ""
 echo "Applying fleet configuration..."
+flightctl apply -f git-config-provider.yaml
 flightctl apply -f fleet.yaml
 echo "✓ Fleet configuration applied"
 
