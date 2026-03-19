@@ -103,24 +103,37 @@ RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}'
     dnf -y clean all
 
 # Install NVIDIA drivers and container toolkit
+# Pin to 590.x
 RUN dnf install -y \
-    kmod-nvidia-latest-dkms \
-    nvidia-driver \
-    nvidia-driver-cuda \
+    "kmod-nvidia-latest-dkms-590*" \
+    "nvidia-driver-590*" \
+    "nvidia-driver-cuda-590*" \
     nvidia-container-toolkit \
     --setopt=install_weak_deps=False \
     --allowerasing && \
     dnf -y clean all
 
-# Manually trigger DKMS build for bootc (modules must be compiled at build time)
+# Compile NVIDIA kernel modules at build time (bootc filesystem is read-only at runtime)
 RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
     mkdir -p /var/lib/dkms && \
-    dkms build -m nvidia -v 590.48.01 -k ${KERNEL_VERSION} && \
-    dkms install -m nvidia -v 590.48.01 -k ${KERNEL_VERSION} --force
+    dkms autoinstall -k ${KERNEL_VERSION}
+
+# Prevent dkms.service from running at boot (would fail on read-only filesystem)
+RUN systemctl mask dkms.service
 
 # Blacklist Nouveau driver (do NOT run dracut - bootc handles initramfs at deployment time)
 RUN echo "blacklist nouveau" > /etc/modprobe.d/blacklist-nouveau.conf && \
     echo "options nouveau modeset=0" >> /etc/modprobe.d/blacklist-nouveau.conf
+
+# Load NVIDIA kernel modules at boot including nvidia-uvm (required for /dev/nvidia-uvm CDI device)
+RUN echo -e "nvidia\nnvidia-uvm\nnvidia-modeset" > /etc/modules-load.d/nvidia.conf
+
+# Enable nvidia-persistenced to create /dev/nvidia-uvm device nodes at boot
+RUN systemctl enable nvidia-persistenced.service
+
+# Create /dev/nvidia-uvm device nodes at boot (nvidia-persistenced alone doesn't create them)
+COPY containerfiles/configs/nvidia-uvm-init.service /etc/systemd/system/nvidia-uvm-init.service
+RUN systemctl enable nvidia-uvm-init.service
 
 # CDI generation service - runs once on first boot to create /etc/cdi/nvidia.yaml
 COPY containerfiles/configs/nvidia-cdi-generate.service /etc/systemd/system/nvidia-cdi-generate.service
@@ -176,7 +189,7 @@ RUN systemctl enable node_exporter.service
 
 # OpenTelemetry Collector - collects host metrics, forwards to Prometheus/OTLP
 RUN dnf copr enable -y frzifus/redhat-opentelemetry-collector-main epel-9-x86_64 && \
-    dnf install -y opentelemetry-collector && \
+    dnf install -y --setopt=tsflags=noscripts opentelemetry-collector && \
     useradd -rs /bin/false observability
 
 RUN mkdir -p /etc/otelcol/certs && \
@@ -204,7 +217,7 @@ RUN mkdir -p /etc/flightctl
 
 LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
 LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, podman-compose, node_exporter, and OpenTelemetry Collector for GPU-accelerated MLOps workloads."
-LABEL org.opencontainers.image.version="v1.0.11"
+LABEL org.opencontainers.image.version="v1.0.18"
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/redhat-et/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"

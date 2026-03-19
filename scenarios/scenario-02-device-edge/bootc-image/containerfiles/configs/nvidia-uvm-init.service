@@ -1,0 +1,16 @@
+[Unit]
+Description=Create NVIDIA UVM device nodes
+Documentation=https://docs.nvidia.com/cuda/cuda-installation-guide-linux/
+After=nvidia-persistenced.service
+Before=nvidia-cdi-generate.service
+Requires=nvidia-persistenced.service
+ConditionPathExists=/dev/nvidia0
+ConditionPathExists=!/dev/nvidia-uvm
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nvidia-modprobe -u -c 0
+
+[Install]
+WantedBy=multi-user.target
