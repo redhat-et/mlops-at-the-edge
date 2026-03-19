@@ -3,7 +3,7 @@
 export AWS_REGION=eu-north-1
 
 aws ec2 delete-key-pair --key-name mlops --region $AWS_REGION
-rm -f mlops.pem
+rm -f aws/mlops.pem
 
 EC2_INSTANCE_NAMES=("flightctl-instance" "flightctl-device-1" "flightctl-device-2")
 

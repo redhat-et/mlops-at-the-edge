@@ -4,7 +4,7 @@ export AWS_REGION=eu-north-1
 
 # Create key pair for accessing the instances
 SSH_KEY_NAME=mlops
-SSH_KEY_FILE=$SSH_KEY_NAME.pem
+SSH_KEY_FILE=aws/$SSH_KEY_NAME.pem
 aws ec2 create-key-pair --key-name $SSH_KEY_NAME --query 'KeyMaterial' --output text > $SSH_KEY_FILE
 chmod 400 $SSH_KEY_FILE
 
@@ -61,7 +61,7 @@ FLIGHTCTL_INSTANCE_ID=$(aws ec2 run-instances \
     --subnet-id $SUBNET_ID \
     --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":100,"VolumeType":"gp3"}}]' \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${NAME}}]" \
-    --user-data file://init-script.txt \
+    --user-data file://aws/init-script.txt \
     --query 'Instances[0].InstanceId' --output text)
 
 # Wait for instance to be running before fetching IP to avoid getting empty/None IP
@@ -188,8 +188,8 @@ done
 # Apply fleet configuration to enrolled devices
 echo ""
 echo "Applying fleet configuration..."
-flightctl apply -f git-config-provider.yaml
-flightctl apply -f fleet.yaml
+flightctl apply -f flightctl/git-config-provider.yaml
+flightctl apply -f flightctl/fleet.yaml
 echo "✓ Fleet configuration applied"
 
 # Wait until the fleet spec has been applied to all devices
