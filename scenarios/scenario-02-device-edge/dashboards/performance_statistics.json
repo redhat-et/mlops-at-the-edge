@@ -124,10 +124,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(vllm_e2e_request_latency_seconds_sum{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval]) / rate(vllm_e2e_request_latency_seconds_count{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval])",
+          "expr": "rate(vllm_e2e_request_latency_seconds_sum{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval]) / rate(vllm_e2e_request_latency_seconds_count{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval])",
           "format": "table",
           "legendFormat": "E2E Latency",
           "range": true,
+          "interval": "",
           "refId": "A"
         }
       ],
@@ -505,10 +506,11 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(vllm_time_to_first_token_seconds_sum{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval]) / rate(vllm_time_to_first_token_seconds_count{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval])",
+          "expr": "rate(vllm_time_to_first_token_seconds_sum{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval]) / rate(vllm_time_to_first_token_seconds_count{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval])",
           "format": "table",
           "legendFormat": "TTFT (Avg)",
           "range": true,
+          "interval": "",
           "refId": "A"
         }
       ],
@@ -883,9 +885,10 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(vllm_generation_tokens_total{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval])",
+          "expr": "rate(vllm_generation_tokens_total{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval])",
           "legendFormat": "Generation TPS",
           "range": true,
+          "interval": "",
           "refId": "A"
         },
         {
@@ -894,11 +897,12 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval])",
+          "expr": "rate(vllm_prompt_tokens_total{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval])",
           "hide": false,
           "instant": false,
           "legendFormat": "Prompt TPS",
           "range": true,
+          "interval": "",
           "refId": "B"
         },
         {
@@ -907,11 +911,12 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(vllm_iteration_tokens_total_count{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__interval])",
+          "expr": "rate(vllm_iteration_tokens_total_count{job=\"flightctl-telemetry-gateway\", device_id=\"$Device_ID\"}[$__rate_interval])",
           "hide": false,
           "instant": false,
           "legendFormat": "Overall Iteration TPS",
           "range": true,
+          "interval": "",
           "refId": "C"
         }
       ],
