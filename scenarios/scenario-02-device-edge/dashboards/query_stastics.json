@@ -134,13 +134,13 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [
-            { "options": { "Calcultaions": { "index": 0, "text": "Last (not null)" } }, "type": "value" }
+            { "options": { "Calculation": { "index": 0, "text": "Last (not null)" } }, "type": "value" }
           ],
           "thresholds": {
             "mode": "absolute",
             "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }]
           },
-          "unit": "ms"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -183,7 +183,7 @@
             "mode": "absolute",
             "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }]
           },
-          "unit": "ms"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -226,7 +226,7 @@
             "mode": "absolute",
             "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }]
           },
-          "unit": "ms"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -398,7 +398,7 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [
-            { "options": { "Calcultaion": { "index": 0, "text": "mean" } }, "type": "value" }
+            { "options": { "Calculation": { "index": 0, "text": "mean" } }, "type": "value" }
           ],
           "thresholds": {
             "mode": "absolute",

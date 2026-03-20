@@ -24,6 +24,6 @@ exporters:
 service:
   pipelines:
     metrics:
-      receivers: [hostmetrics, prometheus]
+      receivers: [prometheus]
       processors: [batch]
       exporters: [prometheus, otlp]
