@@ -1,6 +1,20 @@
 #!/bin/bash
 
-export AWS_REGION=eu-north-1
+# Set AWS_REGION and RHEL_AMI_ID from user input
+export AWS_REGION=$1
+if [ -z "$AWS_REGION" ]
+then
+    echo "Missing AWS region where the AMI is hosted"
+    exit 1
+fi
+
+export RHEL_AMI_ID=$2
+if [ -z "$RHEL_AMI_ID" ]
+then
+    echo "Missing AMI ID of a RHEL image with the Flightctl agent and Nvidia drivers configured"
+    echo "This image can be prepared using the build-ami.sh script"
+    exit 1
+fi
 
 # Create key pair for accessing the instances
 SSH_KEY_NAME=mlops
@@ -93,12 +107,10 @@ echo "Successfully logged into FlightCtl"
 
 ENROLLMENT_SERVICE_CONFIG=$(flightctl certificate request --signer=enrollment --expiration=365d --output=embedded)
 
-# AMI id for a custom built RHEL image with the Flightctl agent and Nvidia drivers preinstalled
-RHEL_AMI_ID=ami-0d7056ed109dd49ee
 # Use g5.xlarge for GPU support (NVIDIA A10G 24GB)
 GPU_INSTANCE_TYPE=g5.xlarge
 
-# Find GPU-compatible subnet (g5.xlarge only available in eu-north-1b, eu-north-1c)
+# Find GPU-compatible subnet
 GPU_SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=availability-zone,Values=$(aws ec2 describe-instance-type-offerings --location-type availability-zone --filters Name=instance-type,Values=$GPU_INSTANCE_TYPE --region $AWS_REGION --query 'InstanceTypeOfferings[0].Location' --output text)" --query 'Subnets[0].SubnetId' --output text)
 
 echo "Launching fleet devices with AMI: ${RHEL_AMI_ID} and instance type: ${GPU_INSTANCE_TYPE}"
