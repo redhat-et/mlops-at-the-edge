@@ -8,10 +8,11 @@ set -euo pipefail
 # and key pair created by build-ami.sh.
 #
 # Usage:
-#   ./clean-up-ami-builder.sh
+#   ./clean-up-ami-builder.sh [region]
+#   ./clean-up-ami-builder.sh us-east-1
 # =============================================================================
 
-REGION="eu-north-1"
+REGION="${1:-eu-north-1}"
 SG_NAME="bootc-builder-sg"
 
 echo "=== Cleaning up bootc-builder AWS resources in ${REGION} ==="

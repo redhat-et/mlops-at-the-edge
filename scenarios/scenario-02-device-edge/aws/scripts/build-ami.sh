@@ -13,12 +13,24 @@ set -euo pipefail
 #   - Bootc image already pushed to Quay.io
 #
 # Usage:
-#   ./build-ami.sh [VERSION]
-#   ./build-ami.sh v1.0.12
+#   ./build-ami.sh <image_tag> [region]
+#   ./build-ami.sh quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.20
+#   ./build-ami.sh quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.20 us-east-1
 # =============================================================================
 
-REGION="eu-north-1"
-OCI_IMAGE_REPO="quay.io/redhat-et/mlops-bootc-rhel10-nvidia"
+IMAGE_TAG="${1:-}"
+REGION="${2:-eu-north-1}"
+
+if [ -z "${IMAGE_TAG}" ]; then
+  echo "Usage: $0 <image_tag> [region]"
+  echo "  e.g. $0 quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.20"
+  echo "  e.g. $0 quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.20 us-east-1"
+  exit 1
+fi
+
+# Extract version from tag for naming resources
+VERSION="${IMAGE_TAG##*:}"
+
 KEY_NAME="bootc-builder-key-$$"
 KEY_FILE="/tmp/${KEY_NAME}.pem"
 SG_NAME="bootc-builder-sg"
@@ -27,22 +39,14 @@ VOLUME_SIZE_ROOT=50
 VOLUME_SIZE_AMI=15
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Version from argument or prompt
-VERSION="${1:-}"
-if [ -z "${VERSION}" ]; then
-  echo "Usage: $0 <version>"
-  echo "  e.g. $0 v1.0.12"
-  exit 1
-fi
-
-echo "=== Building AMI for ${OCI_IMAGE_REPO}:${VERSION} ==="
+echo "=== Building AMI for ${IMAGE_TAG} ==="
 echo ""
 
 # -----------------------------------------------------------------------------
 # Step 1: Set up AWS resources (key pair, security group)
 # -----------------------------------------------------------------------------
 echo "--- Step 1: Setting up AWS resources ---"
-echo "  Using image: ${OCI_IMAGE_REPO}:${VERSION}"
+echo "  Using image: ${IMAGE_TAG}"
 
 # Key pair - always create fresh (cleanup removes it)
 echo "  Creating key pair: ${KEY_NAME}"
@@ -150,7 +154,7 @@ echo "Pulling bootc-image-builder..."
 sudo podman pull quay.io/centos-bootc/bootc-image-builder:latest
 
 echo "Pulling bootc image..."
-sudo podman pull ${OCI_IMAGE_REPO}:${VERSION}
+sudo podman pull ${IMAGE_TAG}
 
 echo "Building disk.raw (this takes 15-20 minutes)..."
 sudo podman run --rm --privileged \
@@ -160,7 +164,7 @@ sudo podman run --rm --privileged \
   -v /var/lib/containers/storage:/var/lib/containers/storage \
   quay.io/centos-bootc/bootc-image-builder:latest \
   --type raw \
-  ${OCI_IMAGE_REPO}:${VERSION}
+  ${IMAGE_TAG}
 
 echo "disk.raw created:"
 ls -lh output/image/disk.raw
@@ -284,4 +288,4 @@ echo "  AMI_ID=\"${AMI_ID}\""
 # Cleanup helper resources
 echo ""
 echo "--- Cleaning up builder resources ---"
-"${SCRIPT_DIR}/clean-up-ami-builder.sh"
+"${SCRIPT_DIR}/clean-up-ami-builder.sh" "${REGION}"
