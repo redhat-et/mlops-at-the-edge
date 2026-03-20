@@ -726,7 +726,10 @@
       }
     ]
   },
-  "time": { "from": "now-12h", "to": "now" },
+  "time": { 
+    "from": "now-1h", 
+    "to": "now" 
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Query Statistics",
