@@ -58,8 +58,6 @@ sudo podman build --platform=linux/amd64 \
   -t ${OCI_IMAGE_REPO}:${VERSION} .
 ```
 
-**Build time:** ~15-20 minutes (includes NVIDIA DKMS compilation)
-
 ### 2. Push to Quay
 
 ```bash
@@ -69,7 +67,13 @@ sudo podman push ${OCI_IMAGE_REPO}:${VERSION}
 
 ### 3. Convert to AMI
 
-Launch a temporary t3.xlarge RHEL 9 build instance in eu-north-1, then:
+Run the helper script to create an AMI. Pass the AWS region to host the AMI and the container image to convert to an AMI.
+
+Example:
+``` ./aws/scripts/build-ami.sh eu-north-1 quay.io/redhat-et/mlops:v1 ```
+
+#### Alternative Manual Approach
+Launch a temporary t3.xlarge RHEL 9 build instance, then:
 
 ```bash
 # On the build instance
