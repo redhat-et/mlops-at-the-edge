@@ -1,15 +1,4 @@
 receivers:
-  hostmetrics:
-    collection_interval: 10s
-    scrapers:
-      cpu:
-      disk:
-      memory:
-      network:
-      filesystem:
-      load:
-      process:
-
   prometheus:
     config:
       scrape_configs:
