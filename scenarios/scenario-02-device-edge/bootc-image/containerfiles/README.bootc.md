@@ -70,7 +70,7 @@ sudo podman push ${OCI_IMAGE_REPO}:${VERSION}
 Run the helper script to create an AMI. Pass the AWS region to host the AMI and the container image to convert to an AMI.
 
 Example:
-``` ./aws/scripts/build-ami.sh eu-north-1 quay.io/redhat-et/mlops:v1 ```
+``` ./aws/scripts/build-ami.sh quay.io/redhat-et/mlops:v1 eu-north-1```
 
 #### Alternative Manual Approach
 Launch a temporary t3.xlarge RHEL 9 build instance, then:
