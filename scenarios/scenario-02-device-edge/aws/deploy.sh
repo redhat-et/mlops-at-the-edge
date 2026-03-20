@@ -16,6 +16,13 @@ then
     exit 1
 fi
 
+export FEDORA_AMI_ID=$3
+if [ -z "$FEDORA_AMI_ID" ]
+then
+    echo "Missing AMI ID of a Fedora image available in the ${AWS_REGION} region"
+    exit 1
+fi
+
 # Create key pair for accessing the instances
 SSH_KEY_NAME=mlops
 SSH_KEY_FILE=aws/$SSH_KEY_NAME.pem
@@ -63,7 +70,6 @@ aws ec2 authorize-security-group-ingress --group-id $FLEET_SG_ID --protocol tcp 
 
 # Launch an instance with a fedora image and install Flightctl using user data script
 NAME=flightctl-instance
-FEDORA_AMI_ID=ami-00591e9b6ab674470
 FLIGHTCTL_INSTANCE_USERNAME=fedora
 
 # Capture instance ID from run-instances command to ensure we get it before querying for IP

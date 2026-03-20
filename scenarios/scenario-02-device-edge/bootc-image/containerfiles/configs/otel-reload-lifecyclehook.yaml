@@ -1,4 +1,4 @@
 - if:
-  - path: /etc/opentelemetry-collector/configs
+  - path: /etc/opentelemetry-collector/configs/
     op: [created, updated, removed]
   run: systemctl restart opentelemetry-collector
