@@ -216,7 +216,7 @@ RUN mkdir -p /etc/flightctl
 
 LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
 LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, podman-compose, node_exporter, and OpenTelemetry Collector for GPU-accelerated MLOps workloads."
-LABEL org.opencontainers.image.version="v1.0.20"
+LABEL org.opencontainers.image.version="v1.0.21"
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/redhat-et/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"
