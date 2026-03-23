@@ -19,5 +19,5 @@ spec:
       - name: inference-server-metrics
         gitRef: 
           repository: mlops-at-the-edge
-          targetRevision: observability
+          targetRevision: main
           path: scenarios/scenario-01-device-edge/flightctl/configs
