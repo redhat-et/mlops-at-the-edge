@@ -124,7 +124,8 @@ jobs:
       
       - name: Login into FlightCtl and roll out fleet spec
         run: |
-          sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
-          sudo dnf install -y flightctl-cli
+          curl -sLo flightctl https://github.com/flightctl/flightctl/releases/latest/download/flightctl-linux-amd64
+          chmod +x flightctl
+          sudo mv flightctl /usr/local/bin/
           flightctl login -k ${{ inputs.flightctl_url }} -u ${{ secrets.FLIGHTCTL_USER }} -p ${{ secrets.FLIGHTCTL_PASSWORD }}
           flightctl apply -f scenarios/scenario-01-device-edge/flightctl/fleet.yaml
