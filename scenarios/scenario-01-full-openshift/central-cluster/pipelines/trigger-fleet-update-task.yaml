@@ -1,0 +1,84 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: trigger-fleet-update
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+    app.kubernetes.io/component: pipelines
+spec:
+  description: >-
+    Triggers the update-fleet GitHub Actions workflow via workflow_dispatch.
+    Updates quadlet files, builds quadlet OCI image, updates fleet.yaml.
+  params:
+    - name: MODELCAR_TAG
+      description: Tag for modelcar image (empty = no change)
+      type: string
+      default: ""
+    - name: VLLM_SERVER_TAG
+      description: Tag for vllm-server image (empty = no change)
+      type: string
+      default: ""
+    - name: OPENWEBUI_TAG
+      description: Tag for openwebui image (empty = no change)
+      type: string
+      default: ""
+    - name: QUADLET_TAG
+      description: Tag for the quadlet OCI image
+      type: string
+    - name: GITHUB_REPO
+      description: GitHub repository (owner/repo)
+      type: string
+      default: "redhat-et/mlops-at-the-edge"
+  steps:
+    - name: trigger
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-pat
+              key: token
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        REPO="$(params.GITHUB_REPO)"
+        WORKFLOW="update-fleet.yaml"
+        URL="https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches"
+
+        # Build JSON payload
+        PAYLOAD=$(cat <<EOF
+        {
+          "ref": "main",
+          "inputs": {
+            "modelcar_tag": "$(params.MODELCAR_TAG)",
+            "vllm_server_tag": "$(params.VLLM_SERVER_TAG)",
+            "openwebui_tag": "$(params.OPENWEBUI_TAG)",
+            "quadlet_tag": "$(params.QUADLET_TAG)"
+          }
+        }
+        EOF
+        )
+
+        echo "Triggering fleet update: ${URL}"
+        echo "  modelcar_tag:    $(params.MODELCAR_TAG)"
+        echo "  vllm_server_tag: $(params.VLLM_SERVER_TAG)"
+        echo "  openwebui_tag:   $(params.OPENWEBUI_TAG)"
+        echo "  quadlet_tag:     $(params.QUADLET_TAG)"
+
+        # curl is available in ubi-minimal
+        HTTP_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+          -X POST "${URL}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "${PAYLOAD}")
+
+        if [ "${HTTP_CODE}" = "204" ]; then
+          echo "Fleet update triggered successfully (HTTP 204)"
+        else
+          echo "Failed to trigger fleet update: HTTP ${HTTP_CODE}"
+          cat /tmp/response.txt
+          exit 1
+        fi

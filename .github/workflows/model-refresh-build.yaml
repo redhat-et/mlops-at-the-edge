@@ -1,0 +1,49 @@
+name: Model Refresh Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version tag (e.g. v1.0.202603181133)"
+        required: true
+        type: string
+      trigger:
+        description: "What triggered this build (audit trail)"
+        required: false
+        default: "kfp-inner-loop"
+        type: string
+
+env:
+  QUAY_NAMESPACE: redhat-et
+  OPENSHIFT_SERVER: https://api.ocp-beta-test.nerc.mghpcc.org:6443
+
+jobs:
+  build-modelcar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install oc CLI
+        run: |
+          curl -sLo oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar xzf oc.tar.gz oc
+          sudo mv oc /usr/local/bin/
+
+      - name: Build modelcar with version tag
+        run: |
+          oc login --token="${{ secrets.OPENSHIFT_TOKEN }}" --server="${{ env.OPENSHIFT_SERVER }}" --insecure-skip-tls-verify
+          VERSION="${{ inputs.model_version }}"
+          IMAGE="quay.io/${{ env.QUAY_NAMESPACE }}/modelcar-llama-3.2-1b:${VERSION}"
+          echo "Building modelcar image: ${IMAGE}"
+          echo "Trigger: ${{ inputs.trigger }}"
+          oc patch bc build-modelcar -n mlops-pipelines --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE}\"}]"
+          oc start-build build-modelcar -n mlops-pipelines --wait --follow
+
+  update-fleet:
+    needs: build-modelcar
+    uses: ./.github/workflows/update-fleet.yaml
+    with:
+      modelcar_tag: ${{ inputs.model_version }}
+      quadlet_tag: ${{ inputs.model_version }}
+    secrets:
+      QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+      QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}

@@ -1,0 +1,25 @@
+[Unit]
+Description=vLLM GPU Inference Server
+After=network-online.target model-car.service
+
+[Container]
+Image=quay.io/redhat-et/vllm-server:v1.0.202603181222
+Volume=model-storage.volume:/models:ro,z
+PublishPort=8000:8000
+AddDevice=nvidia.com/gpu=all
+PodmanArgs=--shm-size=2g --network-alias=vllm-server
+Environment=LD_LIBRARY_PATH=/usr/lib64
+Exec=vllm serve /models --served-model-name Llama-3.2-1B-Instruct
+Network=mlops.network
+HealthCmd=curl -f http://localhost:8000/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=90s
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target

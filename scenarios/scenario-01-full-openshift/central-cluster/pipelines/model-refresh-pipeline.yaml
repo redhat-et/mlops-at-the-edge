@@ -1,0 +1,129 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: model-refresh
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+    app.kubernetes.io/component: pipelines
+spec:
+  description: >-
+    Triggered by performance alerts (high latency, error rate) from edge devices.
+    Rebuilds the modelcar image with a new/updated model and pushes to Quay.
+    In a full setup, would also update the Fleet manifest to trigger rollout.
+  params:
+    - name: git-url
+      description: Git repository URL
+      type: string
+      default: "https://github.com/redhat-et/mlops-at-the-edge.git"
+    - name: git-revision
+      description: Git branch to build from
+      type: string
+      default: "main"
+    - name: quay-namespace
+      description: Quay.io namespace/org for image push
+      type: string
+      default: "redhat-et"
+    - name: model-version
+      description: Version tag for the new model image
+      type: string
+      default: "latest"
+    - name: alert-name
+      description: Name of the alert that triggered this pipeline
+      type: string
+      default: "manual"
+  workspaces:
+    - name: shared-workspace
+      description: PVC for cloned source code
+  tasks:
+    # Step 1: Clone the repository
+    - name: git-clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+        - name: deleteExisting
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+    # Step 2: Log the trigger context
+    - name: log-alert
+      runAfter:
+        - git-clone
+      taskRef:
+        name: log-alert-context
+      params:
+        - name: ALERT_NAME
+          value: $(params.alert-name)
+        - name: MODEL_VERSION
+          value: $(params.model-version)
+
+    # Step 3: Rebuild the modelcar image
+    - name: build-modelcar
+      runAfter:
+        - log-alert
+      taskRef:
+        name: build-and-push-image
+      params:
+        - name: BUILD_CONFIG
+          value: build-modelcar
+        - name: CONTEXT
+          value: "scenarios/containers/modelcar"
+        - name: IMAGE_TAG
+          value: $(params.model-version)
+        - name: IMAGE_BASE
+          value: "quay.io/$(params.quay-namespace)/modelcar-llama-3.2-1b"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # Step 4: Update quadlets and fleet via GitHub Actions
+    - name: trigger-fleet-update
+      runAfter:
+        - build-modelcar
+      taskRef:
+        name: trigger-fleet-update
+      params:
+        - name: MODELCAR_TAG
+          value: $(params.model-version)
+        - name: QUADLET_TAG
+          value: $(params.model-version)
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: log-alert-context
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  description: >-
+    Logs alert context for audit trail. In production, the notify-completion
+    step could update a Fleet manifest or call the FlightCtl API.
+  params:
+    - name: ALERT_NAME
+      type: string
+    - name: MODEL_VERSION
+      type: string
+  steps:
+    - name: log
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      script: |
+        #!/usr/bin/env bash
+        echo "========================================"
+        echo "Model Refresh Pipeline"
+        echo "========================================"
+        echo "Alert:         $(params.ALERT_NAME)"
+        echo "Model Version: $(params.MODEL_VERSION)"
+        echo "Timestamp:     $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "========================================"
+        if [ "$(params.ALERT_NAME)" = "completed" ]; then
+          echo "Model image rebuilt and pushed successfully."
+          echo "Next step: Update Fleet manifest to reference new image tag."
+          echo "  image: quay.io/redhat-et/modelcar-llama-3.2-1b:$(params.MODEL_VERSION)"
+        fi

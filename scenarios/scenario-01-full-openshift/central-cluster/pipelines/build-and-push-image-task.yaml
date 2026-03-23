@@ -1,0 +1,62 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-and-push-image
+  namespace: mlops-pipelines
+  labels:
+    app.kubernetes.io/part-of: mlops-edge
+spec:
+  description: >-
+    Triggers an OpenShift BuildConfig to build a container image and push
+    to a registry. Uses oc start-build with binary input from the workspace.
+  params:
+    - name: BUILD_CONFIG
+      description: Name of the BuildConfig to trigger
+      type: string
+    - name: CONTEXT
+      description: Build context directory relative to workspace root
+      type: string
+      default: "."
+    - name: IMAGE_TAG
+      description: Tag to apply to the output image
+      type: string
+      default: "latest"
+    - name: IMAGE_BASE
+      description: >-
+        Base image reference without tag (e.g. quay.io/redhat-et/openwebui).
+        Used to patch the BuildConfig output before building.
+      type: string
+  workspaces:
+    - name: source
+      description: Workspace containing the source code
+  steps:
+    - name: build
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      env:
+        - name: HOME
+          value: /tmp/oc-home
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        mkdir -p "$HOME"
+
+        BC="$(params.BUILD_CONFIG)"
+        TAG="$(params.IMAGE_TAG)"
+        IMAGE_BASE="$(params.IMAGE_BASE)"
+        CONTEXT="$(workspaces.source.path)/$(params.CONTEXT)"
+
+        echo "Build config: $BC"
+        echo "Context dir:  $CONTEXT"
+        echo "Output image: ${IMAGE_BASE}:${TAG}"
+
+        # Patch the BuildConfig output tag
+        oc patch bc "$BC" --type=json \
+          -p "[{\"op\":\"replace\",\"path\":\"/spec/output/to/name\",\"value\":\"${IMAGE_BASE}:${TAG}\"}]"
+
+        # Start the build (uses BuildConfig's Git source)
+        oc start-build "$BC" \
+          --wait \
+          --follow
+
+        echo "Successfully built and pushed ${IMAGE_BASE}:${TAG}"

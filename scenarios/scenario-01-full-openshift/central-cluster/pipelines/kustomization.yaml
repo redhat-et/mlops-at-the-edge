@@ -2,6 +2,17 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # OLM - OpenShift Pipelines operator
   - namespace.yaml
   - subscription.yaml
+  # Pipeline resources
+  - pipeline-workspace-pvc.yaml
+  - build-and-push-image-task.yaml
+  - trigger-fleet-update-task.yaml
+  - build-mlops-containers.yaml
+  - trigger.yaml
+  # Stretch goal - alert-triggered model refresh
+  - model-refresh-pipeline.yaml
+  - alert-trigger.yaml
+  - prometheus-rules.yaml
 

@@ -1,0 +1,26 @@
+# Containerfile for packaging Quadlet manifests as OCI image
+# FlightCtl agent will extract and deploy these quadlet files as systemd units
+
+FROM scratch
+
+# Copy quadlet container definitions
+COPY scenarios/quadlet/model-car.container /model-car.container
+COPY scenarios/quadlet/vllm-server.container /vllm-server.container
+COPY scenarios/quadlet/vllm-bench.container /vllm-bench.container
+COPY scenarios/quadlet/vllm-bench.timer /vllm-bench.timer
+COPY scenarios/quadlet/openwebui.container /openwebui.container
+
+# Copy quadlet volume definitions
+COPY scenarios/quadlet/model-storage.volume /model-storage.volume
+COPY scenarios/quadlet/openwebui-data.volume /openwebui-data.volume
+
+# Copy quadlet network definition
+COPY scenarios/quadlet/mlops.network /mlops.network
+
+# Metadata labels for image identification
+LABEL org.opencontainers.image.title="MLOps GPU Stack Quadlet Manifests"
+LABEL org.opencontainers.image.description="Systemd quadlet files for deploying model-car, vLLM, OpenWebUI, and vllm-bench with 6-minute timer"
+LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
+LABEL org.opencontainers.image.source="https://github.com/redhat-et/mlops-at-the-edge"
+LABEL app.type="quadlet"
+LABEL app.runtime="podman"
