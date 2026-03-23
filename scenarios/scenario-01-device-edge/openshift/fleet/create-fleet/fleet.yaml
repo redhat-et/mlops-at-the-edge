@@ -1,0 +1,10 @@
+apiVersion: flightctl.io/v1beta1
+kind: Fleet
+metadata:
+  name: mlops
+spec:
+  selector:
+    matchLabels:
+      project: mlops
+  template: 
+    spec: {}

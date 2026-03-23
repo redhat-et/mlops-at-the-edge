@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -eo pipefail
+
+# Prerequisites
+sudo dnf install -y wget
+
+# Install Flightctl
+sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
+sudo dnf install -y flightctl-services-1.1.0~rc4-1.fc43.x86_64
+sudo dnf install -y flightctl-cli-1.1.0~rc4-1.fc43.x86_64
+sudo dnf install -y flightctl-observability-1.1.0~rc4-1.fc43.x86_64
+
+# Install yq
+VERSION=v4.52.2
+PLATFORM=linux_amd64
+
+wget https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_${PLATFORM}.tar.gz -O - | tar xz && sudo mv yq_${PLATFORM} /usr/local/bin/yq
+
+# Set global.baseDomain
+FQDN=$(curl ifconfig.me).nip.io yq -i '.global.baseDomain = strenv(FQDN)' /etc/flightctl/service-config.yaml
+
+# Start Flightctl service
+sudo systemctl enable --now flightctl.target
+
+# Add user to PAM issuer
+export USER=mlops
+export PASSWORD=mlops123
+
+sudo podman exec -i flightctl-pam-issuer groupadd flightctl-admin 2>/dev/null || true && \
+sudo podman exec flightctl-pam-issuer adduser $USER && \
+sudo podman exec -i flightctl-pam-issuer sh -c "echo \"$USER:$PASSWORD\" | chpasswd" && \
+sudo podman exec -i flightctl-pam-issuer usermod -aG flightctl-admin $USER
+
+# Download sample Grafana dashboards visualising metrics from the vLLM server running on each member of the MLOps fleet
+curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/main/scenarios/scenario-01-device-edge/dashboards/performance_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
+curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/main/scenarios/scenario-01-device-edge/dashboards/query_stastics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
+
+# Start observability service
+sudo systemctl enable --now flightctl-observability.target

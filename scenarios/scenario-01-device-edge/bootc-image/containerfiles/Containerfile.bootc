@@ -1,0 +1,227 @@
+# Containerfile for RHEL 10 Bootc OS Image with FlightCtl + NVIDIA GPU Support
+#
+# Includes: FlightCtl agent (late binding), Podman + podman-compose,
+# NVIDIA drivers 590+ with CUDA 13.1, node_exporter, OpenTelemetry Collector
+#
+# Late binding: FlightCtl enrollment cert is NOT in the image - injected via cloud-init at launch
+#
+# Build:
+#   export VERSION=v1.0.X
+#   export OCI_IMAGE_REPO=quay.io/redhat-et/mlops-bootc-rhel10-nvidia
+#   cd scenarios/scenario-01-device-edge/bootc-image
+#   sudo podman build --platform=linux/amd64 -f containerfiles/Containerfile.bootc -t ${OCI_IMAGE_REPO}:${VERSION} .
+#
+# Convert to AMI:
+#   sudo podman run --rm -it --privileged --pull=newer \
+#     --security-opt label=type:unconfined_t \
+#     -v "${PWD}/output":/output \
+#     -v /var/lib/containers/storage:/var/lib/containers/storage \
+#     quay.io/centos-bootc/bootc-image-builder:latest \
+#     --type ami \
+#     ${OCI_IMAGE_REPO}:${VERSION}
+
+FROM registry.redhat.io/rhel10/rhel-bootc:10.0
+
+# =============================================================================
+# SECTION 1: FlightCtl Agent Installation (Late Binding)
+# =============================================================================
+
+# Install EPEL repository for RHEL 10
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm && \
+    dnf -y clean all
+
+# Install greenboot from CentOS Stream 9 (not available in EPEL 10 yet)
+# FlightCtl agent requires greenboot < 0.16.0, so pin to 0.15.x
+RUN dnf install -y \
+    --repofrompath=centos9-appstream,https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/ \
+    --setopt=centos9-appstream.gpgcheck=0 \
+    'greenboot-0.15*' \
+    'greenboot-default-health-checks-0.15*' && \
+    dnf -y clean all
+
+# Install FlightCtl agent
+RUN dnf -y config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.repo && \
+    dnf -y install flightctl-agent --setopt=install_weak_deps=False && \
+    dnf -y clean all && \
+    systemctl enable flightctl-agent.service && \
+    systemctl mask bootc-fetch-apply-updates.timer
+
+# =============================================================================
+# SECTION 2: NVIDIA GPU Setup (Build-Time Installation)
+# =============================================================================
+
+# Install build tools from CentOS Stream 10 (RHEL 10 repos incomplete)
+# dnf swap replaces RHEL openssl packages with CentOS Stream versions atomically
+RUN dnf swap -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    openssl-fips-provider-so openssl-libs && \
+    dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    gcc \
+    make \
+    dkms && \
+    dnf -y clean all
+
+# X11/OpenGL/Vulkan dependencies required by NVIDIA driver packages (even for headless compute)
+RUN dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    libX11 \
+    libXext \
+    libglvnd \
+    libglvnd-egl \
+    libglvnd-gles \
+    libglvnd-glx \
+    libglvnd-opengl \
+    libvdpau \
+    vulkan-loader \
+    ocl-icd \
+    opencl-filesystem && \
+    dnf -y clean all
+
+# Add NVIDIA CUDA repository
+RUN dnf config-manager --add-repo \
+    https://developer.download.nvidia.com/compute/cuda/repos/rhel10/x86_64/cuda-rhel10.repo
+
+# Install kernel-devel matching the bootc image kernel (not build host kernel)
+RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
+    dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    "kernel-devel-${KERNEL_VERSION}" \
+    "kernel-headers-${KERNEL_VERSION}" && \
+    dnf -y clean all
+
+# Install NVIDIA drivers and container toolkit
+# Pin to 590.x
+RUN dnf install -y \
+    "kmod-nvidia-latest-dkms-590*" \
+    "nvidia-driver-590*" \
+    "nvidia-driver-cuda-590*" \
+    nvidia-container-toolkit \
+    --setopt=install_weak_deps=False \
+    --allowerasing && \
+    dnf -y clean all
+
+# Compile NVIDIA kernel modules at build time (bootc filesystem is read-only at runtime)
+RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
+    mkdir -p /var/lib/dkms && \
+    dkms autoinstall -k ${KERNEL_VERSION}
+
+# Prevent dkms.service from running at boot (would fail on read-only filesystem)
+RUN systemctl mask dkms.service
+
+# Blacklist Nouveau driver (do NOT run dracut - bootc handles initramfs at deployment time)
+RUN echo "blacklist nouveau" > /etc/modprobe.d/blacklist-nouveau.conf && \
+    echo "options nouveau modeset=0" >> /etc/modprobe.d/blacklist-nouveau.conf
+
+# Load NVIDIA kernel modules at boot including nvidia-uvm (required for /dev/nvidia-uvm CDI device)
+RUN echo -e "nvidia\nnvidia-uvm\nnvidia-modeset" > /etc/modules-load.d/nvidia.conf
+
+# Enable nvidia-persistenced to create /dev/nvidia-uvm device nodes at boot
+RUN systemctl enable nvidia-persistenced.service
+
+# Create /dev/nvidia-uvm device nodes at boot (nvidia-persistenced alone doesn't create them)
+COPY containerfiles/configs/nvidia-uvm-init.service /etc/systemd/system/nvidia-uvm-init.service
+RUN systemctl enable nvidia-uvm-init.service
+
+# CDI generation service - runs once on first boot to create /etc/cdi/nvidia.yaml
+COPY containerfiles/configs/nvidia-cdi-generate.service /etc/systemd/system/nvidia-cdi-generate.service
+RUN systemctl enable nvidia-cdi-generate.service
+
+# =============================================================================
+# SECTION 3: Container Runtime (Podman)
+# =============================================================================
+
+RUN dnf install -y \
+    podman \
+    podman-compose && \
+    dnf -y clean all && \
+    systemctl enable podman.service
+
+COPY containerfiles/configs/containers.conf /etc/containers/containers.conf
+
+# Allow containers to access GPU devices via CDI without disabling SELinux
+RUN setsebool -P container_use_devices 1
+
+RUN mkdir -p /etc/cdi
+
+# =============================================================================
+# SECTION 4: Cloud-Init for EC2 Runtime Configuration
+# =============================================================================
+
+RUN dnf install -y \
+    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
+    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
+    --setopt=centos10-baseos.gpgcheck=0 \
+    --setopt=centos10-appstream.gpgcheck=0 \
+    cloud-init \
+    wget && \
+    dnf -y clean all && \
+    ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
+    systemctl enable cloud-init.service
+
+# =============================================================================
+# SECTION 5: Observability - Node Exporter + OpenTelemetry Collector
+# =============================================================================
+
+# Node Exporter - system metrics on port 9100
+RUN NODE_EXPORTER_VERSION="1.8.2" && \
+    curl -L https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz \
+    -o /tmp/node_exporter.tar.gz && \
+    tar -xzf /tmp/node_exporter.tar.gz -C /usr/local/bin --strip-components=1 \
+    node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter && \
+    rm /tmp/node_exporter.tar.gz && \
+    useradd -rs /bin/false node_exporter
+
+COPY containerfiles/configs/node_exporter.service /etc/systemd/system/node_exporter.service 
+RUN systemctl enable node_exporter.service
+
+# OpenTelemetry Collector - collects host metrics, forwards to Prometheus/OTLP
+RUN dnf copr enable -y frzifus/redhat-opentelemetry-collector-main epel-9-x86_64 && \
+    dnf install -y --setopt=tsflags=noscripts opentelemetry-collector
+
+RUN mkdir -p /etc/otelcol/certs && \
+    mkdir -p /etc/flightctl/certs.d && \
+    mkdir -p /usr/lib/systemd/system && \
+    mkdir -p /etc/systemd/system/opentelemetry-collector.service.d
+
+COPY containerfiles/configs/otelcol-config.yaml /etc/opentelemetry-collector/configs/base-config.yaml 
+COPY containerfiles/configs/flightctl-cert-config.yaml /etc/flightctl/certs.d/otel.yaml
+COPY containerfiles/configs/01-configure-otel-certs.conf /etc/systemd/system/opentelemetry-collector.service.d/01-configure-certs.conf
+COPY containerfiles/configs/otel-reload-lifecyclehook.yaml /usr/lib/flightctl/hooks.d/afterupdating/otel-reload.yaml
+
+RUN systemctl enable opentelemetry-collector
+
+# =============================================================================
+# SECTION 6: Pre-create Directories
+# =============================================================================
+
+RUN mkdir -p /var/lib/containers
+RUN mkdir -p /etc/flightctl
+
+# =============================================================================
+# Metadata Labels
+# =============================================================================
+
+LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
+LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, podman-compose, node_exporter, and OpenTelemetry Collector for GPU-accelerated MLOps workloads."
+LABEL org.opencontainers.image.version="v1.0.21"
+LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
+LABEL org.opencontainers.image.source="https://github.com/redhat-et/mlops-at-the-edge"
+LABEL io.flightctl.agent="true"
+LABEL io.flightctl.binding="late"
+LABEL hardware.gpu.vendor="nvidia"
+LABEL hardware.gpu.model="a10g"
+LABEL os.distribution="rhel"
+LABEL os.version="10"

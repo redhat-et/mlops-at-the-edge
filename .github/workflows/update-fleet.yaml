@@ -102,7 +102,7 @@ jobs:
       - name: Update fleet.yaml
         run: |
           TAG="${{ inputs.quadlet_tag }}"
-          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${TAG}|" scenarios/scenario-02-device-edge/aws/fleet.yaml
+          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${TAG}|" scenarios/scenario-01-device-edge/flightctl/fleet.yaml
           echo "Updated fleet.yaml to mlops-quadlet:${TAG}"
 
       - name: Commit and push updates
@@ -110,6 +110,6 @@ jobs:
           TAG="${{ inputs.quadlet_tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add scenarios/quadlet/ scenarios/scenario-02-device-edge/aws/fleet.yaml
+          git add scenarios/quadlet/ scenarios/scenario-01-device-edge/flightctl/fleet.yaml
           git diff --cached --quiet && echo "No changes to commit" || \
             (git commit -m "Update quadlet and fleet to ${TAG}" && git push)
