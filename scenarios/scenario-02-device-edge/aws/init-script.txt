@@ -33,8 +33,8 @@ sudo podman exec -i flightctl-pam-issuer sh -c "echo \"$USER:$PASSWORD\" | chpas
 sudo podman exec -i flightctl-pam-issuer usermod -aG flightctl-admin $USER
 
 # Download sample Grafana dashboards visualising metrics from the vLLM server running on each member of the MLOps fleet
-curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/observability/scenarios/scenario-02-device-edge/dashboards/performance_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
-curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/observability/scenarios/scenario-02-device-edge/dashboards/query_stastics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
+curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/main/scenarios/scenario-02-device-edge/dashboards/performance_statistics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
+curl https://raw.githubusercontent.com/redhat-et/mlops-at-the-edge/refs/heads/main/scenarios/scenario-02-device-edge/dashboards/query_stastics.json --output-dir /etc/flightctl/flightctl-grafana/provisioning/dashboards/flightctl -O
 
 # Start observability service
 sudo systemctl enable --now flightctl-observability.target
