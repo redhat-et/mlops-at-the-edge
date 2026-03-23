@@ -13,6 +13,7 @@
 #   - oc login to the OpenShift cluster
 #   - kfp Python package installed (pip install kfp)
 #   - github-pat secret exists in mlops-kfp namespace
+#   - flightctl-url secret exists in mlops-kfp namespace
 #   - DSPA deployed and pipeline uploaded
 
 set -euo pipefail
@@ -56,6 +57,16 @@ if [ -z "${GITHUB_TOKEN}" ]; then
     GITHUB_TOKEN="missing-create-github-pat-secret"
 fi
 
+# Read Flightctl URL from secret (if it exists)
+FLIGHTCTL_URL=$(oc get secret flightctl-url -n "${NAMESPACE}" -o jsonpath='{.data.url}' 2>/dev/null | base64 -d || true)
+if [ -z "${FLIGHTCTL_URL}" ]; then
+    echo ""
+    echo "Warning: flightctl-url secret not found in ${NAMESPACE}."
+    echo "The trigger_outer_loop step will fail to redeploy the latest model unless a destination is specified."
+    echo "Create it with: oc create secret generic flightctl-url --from-literal=url=<URL> -n ${NAMESPACE}"
+    echo ""
+fi
+
 echo ""
 echo "Creating pipeline run..."
 
@@ -91,6 +102,7 @@ run = client.create_run_from_pipeline_id(
         "severity": "${SEVERITY}",
         "device_id": "${DEVICE_ID}",
         "github_token": "${GITHUB_TOKEN}",
+        "flightctl_url": "${FLIGHTCTL_URL}"
     },
 )
 print(f"Run created: {run.run_id}")

@@ -24,6 +24,7 @@ GitHub Actions (model-refresh-build.yaml)
   3. Build + push quadlet OCI image
   4. Update fleet.yaml
   5. Commit and push
+  6. Roll out latest Fleet spec
         |
         v
 FlightCtl rolls out to edge devices
@@ -34,7 +35,6 @@ FlightCtl rolls out to edge devices
 | File | Purpose |
 |------|---------|
 | `pipeline.py` | KFP v2 pipeline definition (Python) |
-| `pipeline.yaml` | Compiled pipeline (upload to RHOAI) |
 | `dspa.yaml` | DataSciencePipelinesApplication CR + namespace |
 | `trigger-pipeline.sh` | Script to create a pipeline run from CLI |
 
@@ -62,6 +62,8 @@ You should see `ds-pipeline-dspa-*`, `mariadb-dspa-*`, and `minio-dspa-*` pods r
 
 ### 2. Upload the Pipeline
 
+Generate the ```pipeline.yaml```, by running the command ```python3 pipeline.py```.
+
 Option A - RHOAI Dashboard:
 - Navigate to Data Science Pipelines > Import Pipeline
 - Upload `pipeline.yaml`
@@ -82,6 +84,13 @@ oc create secret generic github-pat \
 
 The PAT needs `repo` and `actions:write` permissions on `redhat-et/mlops-at-the-edge`.
 
+### 4. Create FlightCtl URL Secret
+```bash
+oc create secret generic flightctl-url \
+  --from-literal=url=https:FLIGHTCTL_URL:3443 \
+  -n mlops-kfp
+```
+
 ## Running the Pipeline
 
 ### Option A: RHOAI Dashboard (recommended for demos)
@@ -93,6 +102,7 @@ The PAT needs `repo` and `actions:write` permissions on `redhat-et/mlops-at-the-
    - `severity`: `warning` or `critical`
    - `device_id`: `edge-001` (or the actual device name)
    - `github_token`: paste your GitHub PAT
+   - `flightctl_url`: copy the URL to your FlightCtl instance
 4. Start
 
 ### Option B: CLI Script
@@ -102,7 +112,7 @@ chmod +x trigger-pipeline.sh
 ./trigger-pipeline.sh VLLMHighLatency warning edge-001
 ```
 
-The script reads the GitHub PAT from the `github-pat` secret automatically.
+The script reads the GitHub PAT from the `github-pat` secret and the FlightCtl URL from the `flightctl-url` secret automatically.
 
 ## Pipeline Parameters
 
@@ -112,6 +122,7 @@ The script reads the GitHub PAT from the `github-pat` secret automatically.
 | `severity` | `warning` | Alert severity level |
 | `device_id` | `unknown` | Edge device identifier |
 | `github_token` | (empty) | GitHub PAT for triggering the outer loop |
+| `flightctl_url` | (empty) | FlightCtl URL for the location to deploy the model|
 
 ## What Each Step Does
 
