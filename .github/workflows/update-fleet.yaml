@@ -123,8 +123,8 @@ jobs:
             (git commit -m "Update quadlet and fleet to ${TAG}" && git push)
       
       - name: Login into FlightCtl and roll out fleet spec
-        run : |
+        run: |
           sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
           sudo dnf install -y flightctl-cli
-          flightctl login -k {{ inputs.flightctl_url }} -u ${{ secrets.FLIGHCTL_USER }} -p ${{ secrets.FLIGHCTL_PASSWORD }}
+          flightctl login -k ${{ inputs.flightctl_url }} -u ${{ secrets.FLIGHTCTL_USER }} -p ${{ secrets.FLIGHTCTL_PASSWORD }}
           flightctl apply -f scenarios/scenario-01-device-edge/flightctl/fleet.yaml

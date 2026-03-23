@@ -48,9 +48,9 @@ jobs:
     with:
       modelcar_tag: ${{ inputs.model_version }}
       quadlet_tag: ${{ inputs.model_version }}
-      flightctl_url: $ {{ inputs.flighctl_url }}
+      flightctl_url: ${{ inputs.flightctl_url }}
     secrets:
       QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
       QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
-      FLIGHTCTL_USER: $ {{ secrets.FLIGHCTL_USER}}
-      FLIGHTCTL_PASSWORD: $ {{ secrets.FLIGHCTL_PASSWORD}}
+      FLIGHTCTL_USER: ${{ secrets.FLIGHTCTL_USER }}
+      FLIGHTCTL_PASSWORD: ${{ secrets.FLIGHTCTL_PASSWORD }}

@@ -67,6 +67,8 @@ if [ -z "${FLIGHTCTL_URL}" ]; then
     echo ""
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo ""
 echo "Creating pipeline run..."
 
@@ -84,26 +86,18 @@ client = kfp.Client(
     ssl_ca_cert=False,
 )
 
-# Find the pipeline by name
-pipelines = client.list_pipelines(filter='{"predicates":[{"key":"name","op":"EQUALS","string_value":"${PIPELINE_NAME}"}]}')
-if not pipelines.pipelines:
-    print("Error: Pipeline '${PIPELINE_NAME}' not found. Upload pipeline.yaml first.")
-    sys.exit(1)
-
-pipeline_id = pipelines.pipelines[0].pipeline_id
-print(f"Found pipeline: {pipeline_id}")
-
-run = client.create_run_from_pipeline_id(
-    pipeline_id=pipeline_id,
-    experiment_name="mlops-inner-loop",
-    run_name=f"inner-loop-{ALERT_NAME}-$(date +%Y%m%d-%H%M%S)",
-    params={
+run = client.create_run_from_pipeline_package(
+    pipeline_file="${SCRIPT_DIR}/pipeline.yaml",
+    arguments={
         "alert_name": "${ALERT_NAME}",
         "severity": "${SEVERITY}",
         "device_id": "${DEVICE_ID}",
         "github_token": "${GITHUB_TOKEN}",
-        "flightctl_url": "${FLIGHTCTL_URL}"
+        "flightctl_url": "${FLIGHTCTL_URL}",
     },
+    run_name="inner-loop-${ALERT_NAME}-$(date +%Y%m%d-%H%M%S)",
+    experiment_name="mlops-inner-loop",
+    namespace="${NAMESPACE}",
 )
 print(f"Run created: {run.run_id}")
 print(f"View in RHOAI Dashboard or: oc get pipelineruns -n ${NAMESPACE}")
