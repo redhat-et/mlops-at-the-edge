@@ -147,7 +147,7 @@ jobs:
       - name: Update fleet.yaml
         run: |
           SHA="${{ needs.detect-changes.outputs.sha_short }}"
-          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${SHA}|" scenarios/scenario-02-device-edge/flightctl/fleet.yaml
+          sed -i "s|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:.*|image: quay.io/${{ env.QUAY_NAMESPACE }}/mlops-quadlet:${SHA}|" scenarios/scenario-01-device-edge/flightctl/fleet.yaml
           echo "Updated fleet.yaml to mlops-quadlet:${SHA}"
 
       - name: Commit and push updates
@@ -155,6 +155,6 @@ jobs:
           SHA="${{ needs.detect-changes.outputs.sha_short }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add scenarios/quadlet/ scenarios/scenario-02-device-edge/flightctl/fleet.yaml
+          git add scenarios/quadlet/ scenarios/scenario-01-device-edge/flightctl/fleet.yaml
           git commit -m "Update quadlet and fleet image tags to ${SHA}" || echo "No changes to commit"
           git push

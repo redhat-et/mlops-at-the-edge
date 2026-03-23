@@ -50,8 +50,8 @@ Thumbs.db
 *.bak
 
 # Ignore generated files
-scenarios/scenario-02-device-edge/openshift/fleet/build-image/output/
-scenarios/scenario-02-device-edge/openshift/fleet/create-fleet/cloud-init
+scenarios/scenario-01-device-edge/openshift/fleet/build-image/output/
+scenarios/scenario-01-device-edge/openshift/fleet/create-fleet/cloud-init
 # Claude
 claude.md
 

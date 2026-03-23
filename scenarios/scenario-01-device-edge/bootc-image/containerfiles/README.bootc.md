@@ -52,7 +52,7 @@ This image is the **OS only**. The application (model-car, vLLM, OpenWebUI) is d
 export VERSION=v1.0.9
 export OCI_IMAGE_REPO=quay.io/redhat-et/mlops-bootc-rhel10-nvidia
 
-cd scenarios/scenario-02-device-edge/bootc-image
+cd scenarios/scenario-01-device-edge/bootc-image
 sudo podman build --platform=linux/amd64 \
   -f containerfiles/Containerfile.bootc \
   -t ${OCI_IMAGE_REPO}:${VERSION} .

@@ -14,4 +14,10 @@ spec:
       applications:
         - name: mlops-gpu-stack
           appType: quadlet
-          image: quay.io/redhat-et/mlops-quadlet:v1.0.202603181222
+          image: quay.io/redhat-et/mlops-quadlet:v1.0.0
+      config:
+      - name: inference-server-metrics
+        gitRef: 
+          repository: mlops-at-the-edge
+          targetRevision: observability
+          path: scenarios/scenario-01-device-edge/flightctl/configs
