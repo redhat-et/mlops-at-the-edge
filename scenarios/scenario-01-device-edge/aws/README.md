@@ -4,7 +4,7 @@ This folder contains scripts to mimic the architectural pattern where FlightCtl 
 
 # Prerequisites
 
-A central OpenShift cluster with the OpenShift AI and OpenShift pipelines operators installed. Before running the script authenticate to AWS via the command ```aws login```.
+A central OpenShift cluster with the OpenShift AI  operator installed and the KubeFlow Pipelines configured. Before running the script authenticate to AWS via the command ```aws login```.
 
 # Instructions
 

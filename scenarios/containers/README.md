@@ -1,4 +1,4 @@
-# Getting Started - MLOps GPU Inference Stack
+# Getting Started - GPU Inference Stack
 
 Deployment guide for the three-container GPU inference stack using the pre-built bootc image.
 
@@ -22,21 +22,6 @@ vllm-server (GPU inference) → port 8000
     ↓ (HTTP API on localhost)
 openwebui (chat UI) → port 8080
 ```
-
----
-
-## Deployment Model
-
-This stack is designed for **FlightCtl-managed edge devices**:
-
-1. **Deploy bootc image** - Pre-built RHEL 10 image with NVIDIA drivers, Podman, and FlightCtl agent
-2. **Enroll device in FlightCtl** - Device registers with FlightCtl control plane
-3. **FlightCtl deploys stack** - GitOps deployment via Fleet spec pointing to your podman-compose manifest
-
-This guide covers:
-- Verifying the bootc image is correctly configured
-- Understanding the container networking and volume architecture
-- Manual deployment for testing (before FlightCtl automation)
 
 ---
 
@@ -83,26 +68,26 @@ Both containers see the same files at `/models`, but modelcar can write and vllm
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Edge Device (RHEL 10 BootC)                         │
+│ Host OS                                             │
 │                                                     │
-│  ┌──────────────┐        Podman Volume             │
-│  │  model-car   │────►  model-storage              │
-│  └──────────────┘        (shared files)            │
+│  ┌──────────────┐        Podman Volume              │
+│  │  model-car   │────►  model-storage               │
+│  └──────────────┘        (shared files)             │
 │                                 │                   │
 │                                 ▼                   │
-│  ┌──────────────┐        ┌──────────┐              │
-│  │ vllm-server  │◄───────┤ /models  │              │
-│  │ (bridge net) │        └──────────┘              │
+│  ┌──────────────┐        ┌──────────┐               │
+│  │ vllm-server  │◄───────┤ /models  │               │
+│  │ (bridge net) │        └──────────┘               │
 │  └──────┬───────┘                                   │
 │         │ port 8000 (exposed)                       │
 │         │                                           │
 │         ▼                                           │
 │  ┌──────────────┐                                   │
 │  │  openwebui   │                                   │
-│  │ (host net)   │ connects to localhost:8000       │
+│  │ (host net)   │ connects to localhost:8000        │
 │  └──────┬───────┘                                   │
 │         │ port 8080 (on host network)               │
-└─────────┼─────────────────────────────────────────┘
+└─────────┼───────────────────────────────────────────
           │
           ▼
     User Browser: http://<device-ip>:8080
@@ -111,17 +96,6 @@ Both containers see the same files at `/models`, but modelcar can write and vllm
 ---
 
 ## Prerequisites
-
-The bootc image includes:
-
-- ✅ RHEL 10 base OS
-- ✅ NVIDIA drivers 590.48.01+ with CUDA 13.1
-- ✅ Podman 4.0+
-- ✅ NVIDIA Container Toolkit
-- ✅ CDI configuration (`/etc/cdi/nvidia.yaml`)
-- ✅ FlightCtl agent (for GitOps deployment)
-- ✅ podman-compose (for stack management)
-- ✅ `container_use_devices` SELinux boolean (GPU access without disabling SELinux)
 
 **Hardware requirements:**
 - NVIDIA GPU with 4GB+ VRAM (tested on A10G with 24GB)
@@ -165,14 +139,11 @@ sudo nvidia-ctk cdi list
 
 **Expected:** Should list `nvidia.com/gpu=all` and individual GPU devices.
 
-**Note about dkms.service failure:**
-If you see `Failed Units: 1 dkms.service` on login, this is **expected and correct**. DKMS build was completed during bootc image build time (compile-time), not at runtime. The NVIDIA drivers are already compiled into the image.
-
 ---
 
-## Manual Deployment (Testing Before FlightCtl)
+## Manual Deployment 
 
-These steps show how to manually deploy the stack for testing. In production, FlightCtl will handle this via GitOps.
+These steps show how to manually deploy the stack for testing.
 
 ### Step 1: Pull Container Images
 
@@ -454,31 +425,3 @@ Replace `<your-device-ip>` with your device's IP address.
 5. **Verify GPU is being used**
    - In SSH session, run: `nvidia-smi`
    - Should show GPU memory usage (~2-4GB) and utilization (10-30%)
-
----
-
-## FlightCtl GitOps Deployment
-
-For production deployments, FlightCtl manages the entire stack via GitOps:
-
-### Deployment Workflow
-
-1. **Device enrollment:**
-   - Boot device with bootc image
-   - FlightCtl agent auto-enrolls device on first boot
-   - Device appears in FlightCtl control plane
-
-2. **Fleet assignment:**
-   - Device is assigned to Fleet (e.g., `mlops-gpu-inference`)
-   - Fleet spec defines desired state (OS version, applications)
-
-3. **Application deployment:**
-   - Fleet spec references podman-compose OCI image from your GitHub repo
-   - FlightCtl agent pulls compose manifest
-   - Agent runs `podman-compose up` with the manifest
-   - Three containers start automatically
-
-4. **Updates:**
-   - Commit changes to your GitHub repo
-   - FlightCtl detects changes and triggers rollout
-   - Gradual rollout per Fleet policy (canary → batches → full fleet)
