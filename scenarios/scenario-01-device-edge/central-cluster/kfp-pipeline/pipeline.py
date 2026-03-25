@@ -79,7 +79,7 @@ def register_model(model_version: str) -> str:
     base_image=PIPELINE_IMAGE,
     packages_to_install=["requests"],
 )
-def trigger_outer_loop(model_version: str, github_token: str) -> str:
+def trigger_outer_loop(model_version: str, github_token: str, flightctl_url: str) -> str:
     """Trigger the GitHub Actions model-refresh-build workflow via workflow_dispatch."""
     import requests
 
@@ -92,6 +92,7 @@ def trigger_outer_loop(model_version: str, github_token: str) -> str:
         "inputs": {
             "model_version": model_version,
             "trigger": "kfp-inner-loop",
+            "flightctl_url": flightctl_url,
         },
     }
 
@@ -103,6 +104,7 @@ def trigger_outer_loop(model_version: str, github_token: str) -> str:
     print(f"Triggering outer loop: {url}")
     print(f"  ref: main")
     print(f"  model_version: {model_version}")
+    print(f"  flightctl_url: {flightctl_url}")
 
     resp = requests.post(url, json=payload, headers=headers, timeout=30)
 
@@ -120,10 +122,11 @@ def trigger_outer_loop(model_version: str, github_token: str) -> str:
     description="Inner loop: respond to edge alert by retraining and triggering outer loop deployment.",
 )
 def inner_loop_pipeline(
+    github_token: str,
+    flightctl_url: str,
     alert_name: str = "VLLMHighLatency",
     severity: str = "warning",
     device_id: str = "unknown",
-    github_token: str = "",
 ):
     log_task = log_alert(
         alert_name=alert_name,
@@ -145,6 +148,7 @@ def inner_loop_pipeline(
     trigger_task = trigger_outer_loop(
         model_version=register_task.output,
         github_token=github_token,
+        flightctl_url=flightctl_url,
     )
     trigger_task.set_caching_options(False)
 

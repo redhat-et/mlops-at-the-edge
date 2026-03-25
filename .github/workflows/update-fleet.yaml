@@ -23,10 +23,18 @@ on:
         description: "Tag for the quadlet OCI image"
         required: true
         type: string
+      flightctl_url:
+        description: "Flightctl URL"
+        required: true
+        type: string
     secrets:
       QUAY_USERNAME:
         required: true
       QUAY_PASSWORD:
+        required: true
+      FLIGHTCTL_USER: 
+        required: true
+      FLIGHTCTL_PASSWORD: 
         required: true
 
   # Called externally (Tekton, manual)
@@ -113,3 +121,11 @@ jobs:
           git add scenarios/quadlet/ scenarios/scenario-01-device-edge/flightctl/fleet.yaml
           git diff --cached --quiet && echo "No changes to commit" || \
             (git commit -m "Update quadlet and fleet to ${TAG}" && git push)
+      
+      - name: Login into FlightCtl and roll out fleet spec
+        run: |
+          curl -sLo flightctl https://github.com/flightctl/flightctl/releases/latest/download/flightctl-linux-amd64
+          chmod +x flightctl
+          sudo mv flightctl /usr/local/bin/
+          flightctl login -k ${{ inputs.flightctl_url }} -u ${{ secrets.FLIGHTCTL_USER }} -p ${{ secrets.FLIGHTCTL_PASSWORD }}
+          flightctl apply -f scenarios/scenario-01-device-edge/flightctl/fleet.yaml
