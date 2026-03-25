@@ -25,8 +25,8 @@ ENV MODEL_PATH=/models \
     VLLM_PORT=8000 \
     VLLM_HOST=0.0.0.0
 
-# Default: start the inference server
-CMD ["vllm", "serve", "/models", \
+# Default args for the base image entrypoint (python3 -m vllm.entrypoints.openai.api_server)
+CMD ["--model", "/models", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--dtype", "bfloat16", \

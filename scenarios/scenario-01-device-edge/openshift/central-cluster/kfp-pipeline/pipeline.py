@@ -88,7 +88,7 @@ def trigger_outer_loop(model_version: str, github_token: str, flightctl_url: str
     url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/dispatches"
 
     payload = {
-        "ref": "main",
+        "ref": "extend-github-actions",
         "inputs": {
             "model_version": model_version,
             "trigger": "kfp-inner-loop",
