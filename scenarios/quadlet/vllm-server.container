@@ -3,7 +3,7 @@ Description=vLLM GPU Inference Server
 After=network-online.target model-car.service
 
 [Container]
-Image=quay.io/redhat-et/vllm-server:v1.0.202603251001
+Image=quay.io/redhat-et/vllm-server:425da63
 Volume=model-storage.volume:/models:ro,z
 PublishPort=8000:8000
 AddDevice=nvidia.com/gpu=all

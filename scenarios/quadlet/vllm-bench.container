@@ -3,7 +3,7 @@ Description=vLLM Benchmark Load Generator
 After=vllm-server.service
 
 [Container]
-Image=quay.io/redhat-et/vllm-server:v1.0.202603251001
+Image=quay.io/redhat-et/vllm-server:425da63
 Volume=model-storage.volume:/models:ro,z
 Network=mlops.network
 Entrypoint=["bash", "-c", "until curl -sf http://vllm-server:8000/health; do sleep 10; done && vllm bench serve --base-url http://vllm-server:8000 --model Llama-3.2-1B-Instruct --tokenizer /models --request-rate 5.0 --num-prompts 500"]
