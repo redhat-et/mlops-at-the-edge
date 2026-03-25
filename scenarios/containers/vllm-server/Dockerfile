@@ -25,9 +25,6 @@ ENV MODEL_PATH=/models \
     VLLM_PORT=8000 \
     VLLM_HOST=0.0.0.0
 
-# Reset entrypoint to allow flexible command specification in quadlet/compose
-ENTRYPOINT []
-
 # Default: start the inference server
 CMD ["vllm", "serve", "/models", \
      "--host", "0.0.0.0", \
