@@ -6,8 +6,7 @@ After=vllm-server.service
 Image=quay.io/redhat-et/vllm-server:v1.0.202603251001
 Volume=model-storage.volume:/models:ro,z
 Network=mlops.network
-Entrypoint=/bin/sh
-Exec=-c "sleep 30 && vllm bench serve --base-url http://vllm-server:8000 --model Llama-3.2-1B-Instruct --tokenizer /models --request-rate 5.0 --num-prompts 500"
+Entrypoint=["bash", "-c", "sleep 30 && vllm bench serve --base-url http://vllm-server:8000 --model Llama-3.2-1B-Instruct --tokenizer /models --request-rate 5.0 --num-prompts 500"]
 
 [Service]
 Type=oneshot

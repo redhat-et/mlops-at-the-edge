@@ -14,7 +14,7 @@ spec:
       applications:
         - name: mlops-gpu-stack
           appType: quadlet
-          image: quay.io/redhat-et/mlops-quadlet:v1.0.202603251001
+          image: quay.io/redhat-et/mlops-quadlet:v1.0.202603251251
       config:
       - name: inference-server-metrics
         gitRef: 
