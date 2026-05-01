@@ -1,15 +1,20 @@
 # Containerfile for RHEL 10 Bootc OS Image with FlightCtl + NVIDIA GPU Support
 #
 # Includes: FlightCtl agent (late binding), Podman + podman-compose,
-# NVIDIA drivers 590+ with CUDA 13.1, node_exporter, OpenTelemetry Collector
+# NVIDIA pre-compiled open drivers (from RHEL repos), node_exporter, OpenTelemetry Collector
 #
 # Late binding: FlightCtl enrollment cert is NOT in the image - injected via cloud-init at launch
 #
-# Build:
+# Build (requires Red Hat credentials for RHEL extensions repo):
 #   export VERSION=v1.0.X
 #   export OCI_IMAGE_REPO=quay.io/redhat-et/mlops-bootc-rhel10-nvidia
 #   cd scenarios/scenario-01-device-edge/bootc-image
-#   sudo podman build --platform=linux/amd64 -f containerfiles/Containerfile.bootc -t ${OCI_IMAGE_REPO}:${VERSION} .
+#   echo "your-rh-username" > rhsm_user && echo 'your-rh-password' > rhsm_pass
+#   sudo podman build --platform=linux/amd64 \
+#     --secret id=rhsm_user,src=$(pwd)/rhsm_user \
+#     --secret id=rhsm_pass,src=$(pwd)/rhsm_pass \
+#     -f containerfiles/Containerfile.bootc -t ${OCI_IMAGE_REPO}:${VERSION} .
+#   rm rhsm_user rhsm_pass
 #
 # Convert to AMI:
 #   sudo podman run --rm -it --privileged --pull=newer \
@@ -47,81 +52,24 @@ RUN dnf -y config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.rep
     systemctl mask bootc-fetch-apply-updates.timer
 
 # =============================================================================
-# SECTION 2: NVIDIA GPU Setup (Build-Time Installation)
+# SECTION 2: NVIDIA GPU Setup (Pre-compiled drivers from Red Hat repos)
 # =============================================================================
 
-# Install build tools from CentOS Stream 10 (RHEL 10 repos incomplete)
-# dnf swap replaces RHEL openssl packages with CentOS Stream versions atomically
-RUN dnf swap -y \
-    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
-    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
-    --setopt=centos10-baseos.gpgcheck=0 \
-    --setopt=centos10-appstream.gpgcheck=0 \
-    openssl-fips-provider-so openssl-libs && \
-    dnf install -y \
-    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
-    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
-    --setopt=centos10-baseos.gpgcheck=0 \
-    --setopt=centos10-appstream.gpgcheck=0 \
-    gcc \
-    make \
-    dkms && \
-    dnf -y clean all
+# Install pre-compiled NVIDIA open kernel modules + container toolkit
+# Registers with RHSM via build secrets (not baked into image layers), installs
+# from RHEL extensions/supplementary repos, then unregisters
+RUN --mount=type=secret,id=rhsm_user --mount=type=secret,id=rhsm_pass \
+    subscription-manager register \
+      --username="$(cat /run/secrets/rhsm_user)" \
+      --password="$(cat /run/secrets/rhsm_pass)" && \
+    dnf -y \
+      --enablerepo=rhel-10-for-x86_64-extensions-rpms \
+      --enablerepo=rhel-10-for-x86_64-supplementary-rpms \
+      install nvidia-open nvidia-container-toolkit && \
+    dnf -y clean all && \
+    subscription-manager unregister
 
-# X11/OpenGL/Vulkan dependencies required by NVIDIA driver packages (even for headless compute)
-RUN dnf install -y \
-    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
-    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
-    --setopt=centos10-baseos.gpgcheck=0 \
-    --setopt=centos10-appstream.gpgcheck=0 \
-    libX11 \
-    libXext \
-    libglvnd \
-    libglvnd-egl \
-    libglvnd-gles \
-    libglvnd-glx \
-    libglvnd-opengl \
-    libvdpau \
-    vulkan-loader \
-    ocl-icd \
-    opencl-filesystem && \
-    dnf -y clean all
-
-# Add NVIDIA CUDA repository
-RUN dnf config-manager --add-repo \
-    https://developer.download.nvidia.com/compute/cuda/repos/rhel10/x86_64/cuda-rhel10.repo
-
-# Install kernel-devel matching the bootc image kernel (not build host kernel)
-RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
-    dnf install -y \
-    --repofrompath=centos10-baseos,https://mirror.stream.centos.org/10-stream/BaseOS/x86_64/os/ \
-    --repofrompath=centos10-appstream,https://mirror.stream.centos.org/10-stream/AppStream/x86_64/os/ \
-    --setopt=centos10-baseos.gpgcheck=0 \
-    --setopt=centos10-appstream.gpgcheck=0 \
-    "kernel-devel-${KERNEL_VERSION}" \
-    "kernel-headers-${KERNEL_VERSION}" && \
-    dnf -y clean all
-
-# Install NVIDIA drivers and container toolkit
-# Pin to 590.x
-RUN dnf install -y \
-    "kmod-nvidia-latest-dkms-590*" \
-    "nvidia-driver-590*" \
-    "nvidia-driver-cuda-590*" \
-    nvidia-container-toolkit \
-    --setopt=install_weak_deps=False \
-    --allowerasing && \
-    dnf -y clean all
-
-# Compile NVIDIA kernel modules at build time (bootc filesystem is read-only at runtime)
-RUN KERNEL_VERSION=$(rpm -q kernel --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}') && \
-    mkdir -p /var/lib/dkms && \
-    dkms autoinstall -k ${KERNEL_VERSION}
-
-# Prevent dkms.service from running at boot (would fail on read-only filesystem)
-RUN systemctl mask dkms.service
-
-# Blacklist Nouveau driver (do NOT run dracut - bootc handles initramfs at deployment time)
+# Blacklist Nouveau driver
 RUN echo "blacklist nouveau" > /etc/modprobe.d/blacklist-nouveau.conf && \
     echo "options nouveau modeset=0" >> /etc/modprobe.d/blacklist-nouveau.conf
 
@@ -216,7 +164,7 @@ RUN mkdir -p /etc/flightctl
 
 LABEL org.opencontainers.image.title="MLOps Bootc RHEL 10 with NVIDIA GPU Support"
 LABEL org.opencontainers.image.description="RHEL 10 bootc image with FlightCtl agent (late binding), NVIDIA drivers 590+, Podman, podman-compose, node_exporter, and OpenTelemetry Collector for GPU-accelerated MLOps workloads."
-LABEL org.opencontainers.image.version="v1.0.21"
+LABEL org.opencontainers.image.version="v1.0.22"
 LABEL org.opencontainers.image.vendor="Red Hat Emerging Technologies"
 LABEL org.opencontainers.image.source="https://github.com/redhat-et/mlops-at-the-edge"
 LABEL io.flightctl.agent="true"

@@ -206,9 +206,31 @@ aws ec2 attach-volume \
 
 aws ec2 wait volume-in-use --region ${REGION} --volume-ids ${VOLUME_ID}
 
+echo "  Waiting for EBS device to appear..."
+VOLUME_SERIAL="${VOLUME_ID//-/}"
+EBS_DEVICE=""
+for i in $(seq 1 12); do
+  EBS_DEVICE=$(ssh -i "${KEY_FILE}" -o StrictHostKeyChecking=no ec2-user@${PUBLIC_IP} \
+    "lsblk -dno NAME,SERIAL 2>/dev/null | grep '${VOLUME_SERIAL}' | awk '{print \"/dev/\" \$1}'" 2>/dev/null || true)
+  if [ -n "${EBS_DEVICE}" ]; then
+    break
+  fi
+  echo "    Attempt ${i}/12 - device not yet visible, waiting 5s..."
+  sleep 5
+done
+
+if [ -z "${EBS_DEVICE}" ]; then
+  echo "  DEBUG: lsblk output on instance:"
+  ssh -i "${KEY_FILE}" -o StrictHostKeyChecking=no ec2-user@${PUBLIC_IP} "lsblk -dno NAME,SERIAL,SIZE"
+  echo "  Looking for serial: ${VOLUME_SERIAL}"
+  echo "ERROR: Could not find EBS device for volume ${VOLUME_ID}"
+  exit 1
+fi
+
+echo "  EBS device: ${EBS_DEVICE}"
 echo "  Copying disk.raw to EBS volume (this takes a few minutes)..."
 ssh -i "${KEY_FILE}" -o StrictHostKeyChecking=no ec2-user@${PUBLIC_IP} \
-  "sudo dd if=output/image/disk.raw of=/dev/nvme1n1 bs=4M status=progress && sync"
+  "sudo dd if=output/image/disk.raw of=${EBS_DEVICE} bs=4M status=progress && sync"
 
 echo "  Detaching volume..."
 aws ec2 detach-volume --region ${REGION} --volume-id ${VOLUME_ID} > /dev/null

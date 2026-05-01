@@ -2,8 +2,8 @@
 
 RHEL 10 bootc image for AWS EC2 g5.xlarge instances with NVIDIA A10G GPU support, FlightCtl agent, and Podman runtime.
 
-**Current Version:** v1.0.9
-**AMI:** TBD (rebuild required)
+**Current Version:** v1.0.21
+**Registry:** `quay.io/redhat-et/mlops-bootc-rhel10-nvidia`
 
 ---
 
@@ -12,10 +12,10 @@ RHEL 10 bootc image for AWS EC2 g5.xlarge instances with NVIDIA A10G GPU support
 | Component | Details |
 |-----------|---------|
 | **OS** | RHEL 10 bootc |
-| **NVIDIA Drivers** | 590.48.01 + CUDA 13.1 (DKMS compiled at build time) |
+| **NVIDIA Drivers** | Pre-compiled open kernel modules from RHEL extensions repo |
 | **FlightCtl Agent** | Late binding (enrollment cert injected via cloud-init at launch) |
 | **Container Runtime** | Podman + podman-compose + nvidia-container-toolkit |
-| **Observability** | OpenTelemetry Collector (enabled), Node Exporter (installed, disabled) |
+| **Observability** | Node Exporter (port 9100) + OpenTelemetry Collector |
 | **Cloud-Init** | EC2 user-data processing for NVMe storage and FlightCtl enrollment |
 
 ---
@@ -25,7 +25,7 @@ RHEL 10 bootc image for AWS EC2 g5.xlarge instances with NVIDIA A10G GPU support
 ```
 Containerfile.bootc + configs/
     ↓ podman build (on x86_64 build instance)
-OCI image → quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.9
+OCI image → quay.io/redhat-et/mlops-bootc-rhel10-nvidia:v1.0.21
     ↓ bootc-image-builder --type ami
 disk.raw → EBS volume → snapshot → AMI
     ↓ deploy.sh (aws/ folder)
@@ -42,20 +42,33 @@ This image is the **OS only**. The application (model-car, vLLM, OpenWebUI) is d
 
 ### Prerequisites
 
-- x86_64 Linux machine (or AWS build instance - cannot build on Mac)
+- x86_64 Linux machine (or AWS build instance — cannot build on Mac)
 - Podman 5.0+
-- Red Hat subscription (`podman login registry.redhat.io`)
+- Red Hat subscription with access to RHEL 10 extensions and supplementary repos (for NVIDIA packages)
+- `podman login registry.redhat.io` (for the base image)
 
 ### 1. Build OCI Image
 
+The NVIDIA driver installation requires Red Hat Subscription Manager (RHSM) credentials, passed as build secrets so they are not baked into the image layers.
+
 ```bash
-export VERSION=v1.0.9
+export VERSION=v1.0.21
 export OCI_IMAGE_REPO=quay.io/redhat-et/mlops-bootc-rhel10-nvidia
 
 cd scenarios/scenario-01-device-edge/bootc-image
+
+# Create credential files (these are .gitignored)
+echo "your-rh-username" > rhsm_user
+echo 'your-rh-password' > rhsm_pass
+
 sudo podman build --platform=linux/amd64 \
+  --secret id=rhsm_user,src=$(pwd)/rhsm_user \
+  --secret id=rhsm_pass,src=$(pwd)/rhsm_pass \
   -f containerfiles/Containerfile.bootc \
   -t ${OCI_IMAGE_REPO}:${VERSION} .
+
+# Clean up credentials
+rm rhsm_user rhsm_pass
 ```
 
 ### 2. Push to Quay
@@ -67,12 +80,14 @@ sudo podman push ${OCI_IMAGE_REPO}:${VERSION}
 
 ### 3. Convert to AMI
 
-Run the helper script to create an AMI. Pass the AWS region to host the AMI and the container image to convert to an AMI.
+Run the helper script to create an AMI. Pass the container image and AWS region:
 
-Example:
-``` ./aws/scripts/build-ami.sh quay.io/redhat-et/mlops:v1 eu-north-1```
+```bash
+./aws/scripts/build-ami.sh ${OCI_IMAGE_REPO}:${VERSION} eu-north-1
+```
 
-#### Alternative Manual Approach
+#### Alternative: Manual Approach
+
 Launch a temporary t3.xlarge RHEL 9 build instance, then:
 
 ```bash
@@ -98,12 +113,17 @@ Then create a 50GB EBS volume, `dd` the disk.raw to it, create a snapshot, and r
 
 ```
 containerfiles/
-├── Containerfile.bootc                # OS image definition
-├── README.bootc.md                    # This file
+├── Containerfile.bootc                  # OS image definition
+├── README.bootc.md                      # This file
 └── configs/
-    ├── containers.conf                # Podman capabilities for GPU workloads
-    └── nvidia-cdi-generate.service    # First-boot systemd service: generates
-                                       # /etc/cdi/nvidia.yaml for GPU passthrough
+    ├── 01-configure-otel-certs.conf     # OTel Collector systemd drop-in for TLS certs
+    ├── containers.conf                  # Podman capabilities for GPU workloads
+    ├── flightctl-cert-config.yaml       # FlightCtl cert config for OTel
+    ├── node_exporter.service            # Prometheus node_exporter systemd unit
+    ├── nvidia-cdi-generate.service      # First-boot: generates /etc/cdi/nvidia.yaml
+    ├── nvidia-uvm-init.service          # Boot: creates /dev/nvidia-uvm device nodes
+    ├── otel-reload-lifecyclehook.yaml   # FlightCtl lifecycle hook to reload OTel
+    └── otelcol-config.yaml              # OpenTelemetry Collector base config
 ```
 
 ---
@@ -137,13 +157,16 @@ ls /etc/cdi/nvidia.yaml
 # FlightCtl agent running
 sudo systemctl status flightctl-agent
 
+# Node Exporter running
+sudo systemctl status node_exporter
+
 # OTel Collector running
-sudo systemctl status otelcol
+sudo systemctl status opentelemetry-collector
+
+# SELinux GPU access enabled
+getsebool container_use_devices
 
 # GPU passthrough works
 sudo podman run --rm --device nvidia.com/gpu=all \
   docker.io/nvidia/cuda:12.0.0-base-ubi8 nvidia-smi
 ```
-
----
-
